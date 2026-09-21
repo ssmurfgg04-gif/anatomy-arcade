@@ -10,6 +10,7 @@ export type Phase =
   | "LOADING"
   | "MAIN_MENU"
   | "MISSION_SELECT"
+  | "MISSION_BRIEF"
   | "MISSION_INTRO"
   | "PLAYING"
   | "SCANNING"
@@ -17,7 +18,13 @@ export type Phase =
   | "OBJECTIVE_COMPLETE"
   | "EDUCATION_POPUP"
   | "MISSION_COMPLETE"
+  | "MISSION_FAILED"
   | "RESULTS";
+
+/** Secondary full-screen overlays (how-to-play, journal, credits) — can sit on top of menus or pause. */
+export type UiOverlay = "HOW_TO_PLAY" | "JOURNAL" | "CREDITS" | null;
+
+export type FailReason = "RIG" | "PATIENT" | null;
 
 export type MissionId = "heart" | "viral" | "brain";
 
@@ -54,6 +61,11 @@ interface GameState {
   prevPhase: Phase | null;
   mission: MissionId;
   cameraMode: CameraMode;
+
+  // meta / UX
+  uiOverlay: UiOverlay;
+  tutorialDone: boolean; // persisted to localStorage by the shell
+  failReason: FailReason;
 
   // vitals / progress
   patientStatus: number; // 0..100
@@ -96,7 +108,20 @@ interface GameState {
   setQualityResolved: (q: "LOW" | "MEDIUM" | "HIGH") => void;
   setLoading: (progress: number, stage: string) => void;
   resetMission: () => void;
+  setUiOverlay: (o: UiOverlay) => void;
+  setTutorialDone: (v: boolean) => void;
+  failMission: (reason: Exclude<FailReason, null>) => void;
 }
+
+/** Human-facing situation line under each objective (the WHY, spec §45). */
+export const OBJECTIVE_WHY: Record<string, string> = {
+  enter: "The nano-robot has been injected into the coronary artery.",
+  locate: "Turbulence ahead means something is obstructing the channel.",
+  scan: "Identify the obstruction before attempting treatment.",
+  clear: "The clot is starving heart muscle of oxygen. Dissolve it.",
+  restore: "Blood must reach the tissue downstream of the clot.",
+  stabilize: "Hold position while the heart rhythm normalizes.",
+};
 
 const MISSION_OBJECTIVES: Record<MissionId, { id: string; label: string }[]> = {
   heart: [
@@ -145,6 +170,10 @@ export const useGame = create<GameState>((set, get) => ({
   activeScan: null,
   discoveryToast: null,
 
+  uiOverlay: null,
+  tutorialDone: false,
+  failReason: null,
+
   settings: {
     quality: "AUTO",
     motionReduced: false,
@@ -170,7 +199,8 @@ export const useGame = create<GameState>((set, get) => ({
       discoveries: [],
       activeScan: null,
       discoveryToast: null,
-      phase: "MISSION_INTRO",
+      failReason: null,
+      phase: "MISSION_BRIEF",
       prevPhase: "MISSION_SELECT",
       cameraMode: "CINEMATIC",
     }),
@@ -258,8 +288,17 @@ export const useGame = create<GameState>((set, get) => ({
       flowHealth: 0,
       activeScan: null,
       discoveryToast: null,
+      failReason: null,
     });
   },
+
+  setUiOverlay: (o) => set({ uiOverlay: o }),
+  setTutorialDone: (v) => set({ tutorialDone: v }),
+
+  failMission: (reason) =>
+    set((s) =>
+      s.phase === "MISSION_FAILED" ? {} : { phase: "MISSION_FAILED", failReason: reason }
+    ),
 }));
 
 export const objectiveId = (m: MissionId, i: number) => MISSION_OBJECTIVES[m][i]?.id ?? "";

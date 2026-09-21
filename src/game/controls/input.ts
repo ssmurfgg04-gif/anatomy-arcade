@@ -91,7 +91,12 @@ export function useKeyboardInput(input: React.MutableRefObject<InputState>) {
   }, [input]);
 }
 
-/** Pointer-lock mouse look — accumulates deltas between frames. */
+/**
+ * Desktop look: pointer-lock when available (click to capture), with a
+ * drag-to-look fallback so the game stays fully playable in contexts where
+ * pointer lock is denied (sandboxed iframes, some browsers). A short click
+ * requests lock; a drag just looks without locking.
+ */
 export function usePointerLook(
   input: React.MutableRefObject<InputState>,
   enabled: boolean
@@ -102,25 +107,55 @@ export function usePointerLook(
     if (!canvas) return;
 
     let locked = false;
+    let dragging = false;
+    let dragMoved = 0;
+    let lastX = 0;
+    let lastY = 0;
+
     const onMove = (e: MouseEvent) => {
-      if (!locked) return;
-      input.current.lookDX += e.movementX * 0.0022;
-      input.current.lookDY += e.movementY * 0.0022;
-    };
-    const onClick = () => {
-      if (!locked && document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock?.();
+      if (locked) {
+        input.current.lookDX += e.movementX * 0.0022;
+        input.current.lookDY += e.movementY * 0.0022;
+      } else if (dragging) {
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        dragMoved += Math.abs(dx) + Math.abs(dy);
+        input.current.lookDX += dx * 0.0034;
+        input.current.lookDY += dy * 0.0034;
+        lastX = e.clientX;
+        lastY = e.clientY;
       }
+    };
+    const onDown = (e: MouseEvent) => {
+      if (locked) return;
+      dragging = true;
+      dragMoved = 0;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    };
+    const onUp = () => {
+      // short click (not a drag) = capture the pointer for free-look
+      if (!locked && dragging && dragMoved < 8) {
+        try {
+          canvas.requestPointerLock?.();
+        } catch {
+          /* denied (iframe sandbox etc.) — drag-look still works */
+        }
+      }
+      dragging = false;
     };
     const onLockChange = () => {
       locked = document.pointerLockElement === canvas;
+      if (locked) dragging = false;
     };
 
-    canvas.addEventListener("click", onClick);
+    canvas.addEventListener("mousedown", onDown);
+    window.addEventListener("mouseup", onUp);
     document.addEventListener("mousemove", onMove);
     document.addEventListener("pointerlockchange", onLockChange);
     return () => {
-      canvas.removeEventListener("click", onClick);
+      canvas.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mouseup", onUp);
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("pointerlockchange", onLockChange);
       if (document.pointerLockElement === canvas) document.exitPointerLock?.();

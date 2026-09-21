@@ -1,11 +1,14 @@
 "use client";
 /**
- * Game HUD (spec §22): corner-anchored telemetry, center reticle, objective
- * panel, discovery toast, damage + heartbeat vignettes. Diegetic, no cards.
+ * Game HUD (spec §22 + playability law): corner telemetry, center reticle,
+ * objective panel (desktop) + always-visible mobile ticker, distance to
+ * target, contextual action hints taught at the moment of need, discovery
+ * toast, micro-facts, damage + heartbeat vignettes.
  */
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "@/game/core/state";
-import { ANATOMY } from "@/game/data/anatomy";
+import { ANATOMY, MICRO_FACTS } from "@/game/data/anatomy";
+import type { HeartRefs } from "@/game/levels/heart/HeartMission";
 
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
@@ -13,11 +16,57 @@ function fmtTime(s: number) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+/** Polls the live distance-to-beacon ref (kept out of zustand: no per-frame rerenders). */
+function useTargetDist(active: boolean) {
+  const [dist, setDist] = useState(-1);
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => {
+      const refs = (window as unknown as { __aaRefs?: { current: HeartRefs } }).__aaRefs?.current;
+      if (refs) setDist(refs.targetDist.current);
+    }, 240);
+    return () => clearInterval(id);
+  }, [active]);
+  return dist;
+}
+
+/** Occasional verified micro-facts (spec §46): one every ~50s, never over panels. */
+function MicroFact({ quiet }: { quiet: boolean }) {
+  const phase = useGame((s) => s.phase);
+  const [fact, setFact] = useState<string | null>(null);
+  const nextAt = useRef(28);
+
+  useEffect(() => {
+    if (phase !== "PLAYING") return;
+    const id = setInterval(() => {
+      if (quiet) return;
+      const t = useGame.getState().missionTime;
+      if (t >= nextAt.current) {
+        nextAt.current = t + 52;
+        setFact(MICRO_FACTS[Math.floor(Math.random() * MICRO_FACTS.length)]);
+        setTimeout(() => setFact(null), 6500);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [phase, quiet]);
+
+  if (!fact) return null;
+  return (
+    <div className="absolute bottom-16 left-1/2 -translate-x-1/2 animate-in fade-in duration-500 sm:bottom-20">
+      <div className="flex max-w-[86vw] items-start gap-2.5 rounded-sm border border-amber-200/20 bg-black/55 px-3.5 py-2 backdrop-blur-sm">
+        <span className="mt-0.5 font-mono text-[8px] tracking-[0.3em] text-amber-200/70">DID YOU KNOW</span>
+        <span className="text-[11px] leading-snug text-white/70">{fact}</span>
+      </div>
+    </div>
+  );
+}
+
 export function HUD({ onPause }: { onPause: () => void }) {
   const phase = useGame((s) => s.phase);
   const missionTime = useGame((s) => s.missionTime);
   const patientStatus = useGame((s) => s.patientStatus);
   const playerHealth = useGame((s) => s.playerHealth);
+  const score = useGame((s) => s.score);
   const objectives = useGame((s) => s.objectives);
   const currentObjective = useGame((s) => s.currentObjective);
   const toast = useGame((s) => s.discoveryToast);
@@ -56,9 +105,21 @@ export function HUD({ onPause }: { onPause: () => void }) {
   }, [toast, dismissToast]);
 
   const inGame = phase === "PLAYING" || phase === "SCANNING" || phase === "INTERACTION" || phase === "OBJECTIVE_COMPLETE" || phase === "EDUCATION_POPUP";
-  if (!inGame) return null;
 
   const cur = objectives[currentObjective];
+  const dist = useTargetDist(!!cur && ["locate", "scan", "clear", "stabilize"].includes(cur.id));
+
+  if (!inGame) return null;
+
+  const distLabel = dist >= 0 ? `${Math.max(0, Math.round(dist))}m` : null;
+
+  // contextual action hint: the exact input needed for the current objective
+  let actionHint: string | null = null;
+  if (cur) {
+    if (cur.id === "scan") actionHint = "AIM AT A GLOWING MARKER — PRESS Q TO SCAN";
+    else if (cur.id === "clear") actionHint = "HOLD E ON THE CLOT TO DISSOLVE IT";
+    else if (cur.id === "stabilize") actionHint = "HOLD POSITION INSIDE THE CYAN RING";
+  }
 
   return (
     <div className="pointer-events-none fixed inset-0 z-30 font-sans text-white">
@@ -70,18 +131,20 @@ export function HUD({ onPause }: { onPause: () => void }) {
       <div className="absolute left-0 right-0 top-0 flex items-start justify-between px-5 pt-[max(env(safe-area-inset-top),14px)] sm:px-8">
         <div className="flex flex-col gap-1">
           <div className="font-mono text-[10px] tracking-[0.3em] text-cyan-200/80">HEART RESPONSE</div>
-          <div className="flex items-center gap-3 font-mono text-xs text-white/70">
+          <div className="flex items-center gap-2.5 font-mono text-xs text-white/70 sm:gap-3">
             <span className="tabular-nums">{fmtTime(missionTime)}</span>
             <span className="text-cyan-300/60">|</span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(194,30,58,0.9)]" />
               PATIENT {Math.round(patientStatus)}%
             </span>
-            <span className="text-cyan-300/60">|</span>
-            <span className="flex items-center gap-1.5">
+            <span className="hidden text-cyan-300/60 sm:inline">|</span>
+            <span className="hidden items-center gap-1.5 sm:flex">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_6px_rgba(45,217,232,0.9)]" />
               RIG {Math.round(playerHealth)}%
             </span>
+            <span className="text-cyan-300/60">|</span>
+            <span className="tabular-nums text-cyan-200/90">+{score} XP</span>
           </div>
         </div>
         <button
@@ -90,6 +153,24 @@ export function HUD({ onPause }: { onPause: () => void }) {
         >
           ESC
         </button>
+      </div>
+
+      {/* mobile objective ticker — objectives are ALWAYS visible (playability law) */}
+      <div className="absolute left-1/2 top-[calc(max(env(safe-area-inset-top),14px)+46px)] w-[min(70vw,20rem)] -translate-x-1/2 md:hidden">
+        <div className="rounded-sm border border-white/12 bg-black/50 px-3 py-2 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-[9px] tracking-[0.3em] text-cyan-200/80">OBJECTIVE</span>
+            {distLabel && <span className="font-mono text-[9px] tabular-nums text-amber-200/90">{distLabel}</span>}
+          </div>
+          <div className="mt-0.5 font-mono text-[11px] leading-tight tracking-wide text-white/90">
+            {cur ? cur.label : "MISSION COMPLETE"}
+          </div>
+          {cur && cur.progress > 0 && cur.progress < 1 && (
+            <div className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-cyan-300 transition-all" style={{ width: `${cur.progress * 100}%` }} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* center reticle */}
@@ -105,12 +186,18 @@ export function HUD({ onPause }: { onPause: () => void }) {
         </div>
       )}
 
-      {/* objective panel — right side */}
+      {/* objective panel — right side (desktop) */}
       <div className="absolute right-5 top-1/2 hidden w-56 -translate-y-1/2 sm:right-8 md:block">
         <div className="mb-2 font-mono text-[9px] tracking-[0.35em] text-cyan-200/70">OBJECTIVE</div>
         <div className="font-mono text-[13px] leading-snug tracking-wide text-white/90">
           {cur ? cur.label : "MISSION COMPLETE"}
         </div>
+        {distLabel && (
+          <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] tabular-nums tracking-[0.2em] text-amber-200/90">
+            <span className="inline-block h-1.5 w-1.5 rotate-45 bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.9)]" />
+            BEACON {distLabel}
+          </div>
+        )}
         {cur && cur.progress > 0 && cur.progress < 1 && (
           <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
             <div className="h-full rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(45,217,232,0.7)] transition-all" style={{ width: `${cur.progress * 100}%` }} />
@@ -128,6 +215,15 @@ export function HUD({ onPause }: { onPause: () => void }) {
         </div>
       </div>
 
+      {/* contextual action hint — teaches the input at the exact moment of need */}
+      {actionHint && phase === "PLAYING" && (
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 sm:bottom-24">
+          <div className="animate-pulse rounded-sm border border-cyan-300/40 bg-black/65 px-4 py-2 font-mono text-[10px] tracking-[0.25em] text-cyan-100 backdrop-blur-sm sm:text-[11px]">
+            {actionHint}
+          </div>
+        </div>
+      )}
+
       {/* bottom-left controls hint (desktop only) */}
       <div className="absolute bottom-6 left-8 hidden font-mono text-[9px] tracking-[0.25em] text-white/35 lg:block">
         WASD MOVE &nbsp;·&nbsp; SHIFT BOOST &nbsp;·&nbsp; Q SCAN &nbsp;·&nbsp; E TREAT
@@ -135,11 +231,11 @@ export function HUD({ onPause }: { onPause: () => void }) {
 
       {/* discovery toast */}
       {toast && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 sm:bottom-16">
+        <div className="absolute bottom-40 left-1/2 -translate-x-1/2 sm:bottom-36">
           <div className="flex items-center gap-3 rounded-sm border border-cyan-300/40 bg-black/60 px-4 py-2.5 backdrop-blur-md">
             <span className="inline-block h-2 w-2 rotate-45 bg-cyan-300 shadow-[0_0_10px_rgba(45,217,232,1)]" />
             <div>
-              <div className="font-mono text-[9px] tracking-[0.3em] text-cyan-200/80">DISCOVERY</div>
+              <div className="font-mono text-[9px] tracking-[0.3em] text-cyan-200/80">DISCOVERY +150 XP</div>
               <div className="font-mono text-xs tracking-widest text-white/90">
                 {ANATOMY[toast.id]?.title ?? toast.title}
               </div>
@@ -147,6 +243,8 @@ export function HUD({ onPause }: { onPause: () => void }) {
           </div>
         </div>
       )}
+
+      <MicroFact quiet={!!toast || !!actionHint} />
     </div>
   );
 }

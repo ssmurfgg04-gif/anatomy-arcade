@@ -14,18 +14,26 @@ import { HUD } from "@/ui/hud/HUD";
 import { EducationPanel } from "@/ui/education/EducationPanel";
 import { MainMenu } from "@/ui/menus/MainMenu";
 import { MissionSelect } from "@/ui/menus/MissionSelect";
-import { LoadingScreen, ObjectiveBanner, MissionComplete, PauseMenu } from "@/ui/menus/Screens";
+import { LoadingScreen, ObjectiveBanner, MissionComplete, MissionBriefing, MissionFailed, PauseMenu } from "@/ui/menus/Screens";
+import { TutorialOverlay } from "@/ui/tutorial/TutorialOverlay";
+import { HowToPlay, Journal, Credits } from "@/ui/overlays/Overlays";
 import { unlockAudio, setMuted } from "@/audio/sfx";
-import { useGame as _g } from "@/game/core/state";
-
-void _g; // keep tree-shaker honest
 
 export default function Home() {
   const phase = useGame((s) => s.phase);
   const setPhase = useGame((s) => s.setPhase);
+  const uiOverlay = useGame((s) => s.uiOverlay);
   const setLoading = useGame((s) => s.setLoading);
   const settings = useGame((s) => s.settings);
+  const setTutorialDone = useGame((s) => s.setTutorialDone);
   const [paused, setPaused] = useState(false);
+
+  // restore persisted flags (tutorial seen, etc.)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("aa_tutorial") === "done") setTutorialDone(true);
+    } catch {}
+  }, [setTutorialDone]);
 
   // BOOT -> staged LOADING (real stages, spec §38)
   useEffect(() => {
@@ -103,16 +111,33 @@ export default function Home() {
     return () => window.removeEventListener("aa-scan", onScan);
   }, []);
 
+  // never let a scan panel survive past the mission end (spec: results are sacred)
+  useEffect(() => {
+    if (phase === "MISSION_COMPLETE" || phase === "MISSION_FAILED") {
+      const st = useGame.getState();
+      if (st.activeScan) st.closeScan();
+    }
+  }, [phase]);
+
   // mobile scroll lock during gameplay (spec §52)
   useEffect(() => {
-    const inGame = phase === "PLAYING" || phase === "SCANNING" || phase === "INTERACTION" || phase === "MISSION_INTRO";
+    const inGame = phase === "MISSION_BRIEF" || phase === "PLAYING" || phase === "SCANNING" || phase === "INTERACTION" || phase === "MISSION_INTRO";
     document.body.style.overflow = inGame ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [phase]);
 
-  const inMission = phase === "MISSION_INTRO" || phase === "PLAYING" || phase === "SCANNING" || phase === "INTERACTION" || phase === "OBJECTIVE_COMPLETE" || phase === "EDUCATION_POPUP" || phase === "MISSION_COMPLETE";
+  const inMission =
+    phase === "MISSION_BRIEF" ||
+    phase === "MISSION_INTRO" ||
+    phase === "PLAYING" ||
+    phase === "SCANNING" ||
+    phase === "INTERACTION" ||
+    phase === "OBJECTIVE_COMPLETE" ||
+    phase === "EDUCATION_POPUP" ||
+    phase === "MISSION_COMPLETE" ||
+    phase === "MISSION_FAILED";
 
   return (
     <main className="fixed inset-0 select-none overflow-hidden bg-[#04070c] text-white">
@@ -121,28 +146,18 @@ export default function Home() {
 
       {/* UI layer */}
       {(phase === "MAIN_MENU" || phase === "MISSION_SELECT") && <MainMenu />}
-      {phase === "MAIN_MENU" && <MainMenuExtra />}
       {phase === "MISSION_SELECT" && <MissionSelect />}
       {phase === "LOADING" && <LoadingScreen />}
       {inMission && <HUD onPause={openPause} />}
+      <MissionBriefing />
       <ObjectiveBanner />
       <MissionComplete />
+      <MissionFailed />
       <EducationPanel />
       {paused && <PauseMenu onResume={resume} />}
+      {uiOverlay === "HOW_TO_PLAY" && <HowToPlay />}
+      {uiOverlay === "JOURNAL" && <Journal />}
+      {uiOverlay === "CREDITS" && <Credits />}
     </main>
-  );
-}
-
-/** Secondary menu links rendered on the main menu surface. */
-function MainMenuExtra() {
-  const setPhase = useGame((s) => s.setPhase);
-  return (
-    <div className="pointer-events-auto fixed bottom-[max(env(safe-area-inset-bottom),18px)] right-6 z-30 flex gap-4 font-mono text-[10px] tracking-[0.3em] text-white/40">
-      <button className="transition hover:text-cyan-200" onClick={() => setPhase("MISSION_SELECT")}>
-        HOW TO PLAY
-      </button>
-      <span className="text-white/20">|</span>
-      <span>V 1.0</span>
-    </div>
   );
 }

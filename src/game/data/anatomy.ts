@@ -137,6 +137,16 @@ export const ANATOMY: Record<string, AnatomyInfo> = {
   },
 };
 
+/** Occasional mid-flight micro-facts (spec §46) — verified, non-spammy. */
+export const MICRO_FACTS: string[] = [
+  "Your heart beats roughly 100,000 times a day.",
+  "A single red blood cell completes a full circuit of your body in about 60 seconds.",
+  "Capillaries are so narrow that red blood cells bend to squeeze through singly.",
+  "Arteries carry blood away from the heart; veins carry it back.",
+  "Blood makes up about 7 percent of your body weight.",
+  "The human body contains roughly 30 trillion cells.",
+];
+
 /** Request payload the client sends to /api/explain */
 export interface ExplainRequest {
   organ: string;

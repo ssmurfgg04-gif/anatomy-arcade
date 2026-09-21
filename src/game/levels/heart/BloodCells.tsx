@@ -61,8 +61,9 @@ export function BloodCells({
     })();
     for (let i = 0; i < countRef.current; i++) {
       const isPlatelet = rng() < 0.08;
+      // keep the spawn corridor (t < 0.06) clear so the first view is open vessel
       arr.push({
-        t: rng(),
+        t: 0.06 + rng() * 0.94,
         angle: rng() * Math.PI * 2,
         dist: 0.15 + rng() * 0.68,
         speed: 0.8 + rng() * 0.5,

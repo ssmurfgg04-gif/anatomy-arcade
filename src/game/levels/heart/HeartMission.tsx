@@ -31,6 +31,8 @@ export interface HeartRefs {
   scanTargets: React.MutableRefObject<THREE.Object3D[]>;
   introProgress: React.MutableRefObject<number>;
   introStart: React.MutableRefObject<number>;
+  targetDist: React.MutableRefObject<number>; // meters along path to current objective beacon
+  dissolved: React.MutableRefObject<boolean>; // first treatment tick happened
 }
 
 export function createHeartRefs(particleCount: number): HeartRefs {
@@ -44,8 +46,15 @@ export function createHeartRefs(particleCount: number): HeartRefs {
     scanTargets: { current: [] },
     introProgress: { current: 0 },
     introStart: { current: -1 },
+    targetDist: { current: -1 },
+    dissolved: { current: false },
   };
 }
+
+/** Path-length of the vessel spline (for distance readouts). */
+const VESSEL_LEN = vesselCurve.getLength();
+const CLOT_T = 0.68;
+const STABILIZE_T = 0.92;
 
 interface Props {
   refs: HeartRefs;
@@ -60,6 +69,23 @@ export function HeartMission({ refs, input, quality }: Props) {
   const scanCooldown = useRef(0);
   const interactLatch = useRef(false);
   const scanLatch = useRef(false);
+  const scanTap = useRef(false); // edge-triggered scan (never missed at low fps)
+
+  // scan taps arrive via keyboard events / touch button events, not polling
+  useEffectReact(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "KeyQ") scanTap.current = true;
+    };
+    const onTap = () => {
+      scanTap.current = true;
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("aa-scan-tap", onTap);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("aa-scan-tap", onTap);
+    };
+  }, []);
 
   const { particleCount } = refs;
 
@@ -116,6 +142,25 @@ export function HeartMission({ refs, input, quality }: Props) {
 
     g.tick(dt);
 
+    // ---- failure states (spec §17): rig destroyed or patient oxygen starved ----
+    if (g.playerHealth <= 0) {
+      g.failMission("RIG");
+      return;
+    }
+    if (g.patientStatus <= 0) {
+      g.failMission("PATIENT");
+      return;
+    }
+
+    // ---- target guidance: distance to the active beacon along the vessel path ----
+    if (!g.objectives[4].done) {
+      refs.targetDist.current = Math.max(0, (CLOT_T - refs.player.t) * VESSEL_LEN);
+    } else if (!g.objectives[5].done) {
+      refs.targetDist.current = Math.max(0, (STABILIZE_T - refs.player.t) * VESSEL_LEN);
+    } else {
+      refs.targetDist.current = -1;
+    }
+
     // ---- objective 02: LOCATE FLOW ANOMALY (reach the narrowing) ----
     if (!g.objectives[1].done && refs.player.t >= HEART_OBJECTIVE_ZONES.locateT) {
       g.completeObjective(1);
@@ -139,7 +184,13 @@ export function HeartMission({ refs, input, quality }: Props) {
             g.setObjectiveProgress(3, 1 - refs.clot.current.reduce((a, s) => a + s.hp, 0) / refs.clot.current.length);
           }
         }
-        if (dissolvedThisFrame > 0) g.addScore(Math.round(dissolvedThisFrame * 90));
+        if (dissolvedThisFrame > 0) {
+          g.addScore(Math.round(dissolvedThisFrame * 90));
+          if (!refs.dissolved.current) {
+            refs.dissolved.current = true;
+            window.dispatchEvent(new CustomEvent("aa-dissolve"));
+          }
+        }
       }
       const allClear = refs.clot.current.every((s) => s.hp <= 0);
       if (allClear && !g.objectives[3].done) {
@@ -189,8 +240,9 @@ export function HeartMission({ refs, input, quality }: Props) {
 
     // ---- scan action ----
     scanCooldown.current = Math.max(0, scanCooldown.current - dt);
-    const scanPressed = input.current.scan || input.current.tScan;
+    const scanPressed = input.current.scan || input.current.tScan || scanTap.current;
     if (scanPressed && !scanLatch.current && scanCooldown.current <= 0 && g.phase === "PLAYING") {
+      scanTap.current = false; // consumed
       scanLatch.current = true;
       scanCooldown.current = 0.6;
       RAY.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -205,7 +257,10 @@ export function HeartMission({ refs, input, quality }: Props) {
         }
       }
     }
-    if (!scanPressed) scanLatch.current = false;
+    if (!scanPressed) {
+      scanLatch.current = false;
+      if (g.phase !== "PLAYING") scanTap.current = false;
+    }
 
     // ambient patient drift while blocked (urgency, spec §24)
     if (!g.objectives[4].done) {
@@ -216,7 +271,7 @@ export function HeartMission({ refs, input, quality }: Props) {
   // scan targets: anatomical points of interest registered into refs
   const scanPoints = useMemo(
     () => [
-      { t: 0.2, angle: 2.6, dist: 0.72, id: "vesselWall", organ: "artery wall" },
+      { t: 0.12, angle: 2.6, dist: 0.72, id: "vesselWall", organ: "artery wall" },
       { t: 0.33, angle: 0.8, dist: 0.5, id: "redBloodCell", organ: "red blood cell" },
       { t: 0.5, angle: -2.2, dist: 0.55, id: "platelet", organ: "platelet" },
       { t: 0.55, angle: 2.2, dist: 0.62, id: "plaque", organ: "cholesterol plaque" },
@@ -249,6 +304,14 @@ export function HeartMission({ refs, input, quality }: Props) {
       if (len < 0.001) return;
       refs.player.pitch = Math.asin(THREE.MathUtils.clamp(d.y / len, -1, 1));
       refs.player.yaw = Math.atan2(-d.x, -d.z);
+      // kill pending look deltas so the aim survives the next frame
+      const inp = (window as unknown as { __aaInput?: { current: { lookDX: number; lookDY: number; tLookDX: number; tLookDY: number } } }).__aaInput?.current;
+      if (inp) {
+        inp.lookDX = 0;
+        inp.lookDY = 0;
+        inp.tLookDX = 0;
+        inp.tLookDY = 0;
+      }
     };
     return () => {
       delete w.__aaTp;
@@ -291,7 +354,7 @@ export function HeartMission({ refs, input, quality }: Props) {
               if (mesh) refs.scanTargets.current[i] = mesh;
             }}
           >
-            <octahedronGeometry args={[0.09, 0]} />
+            <octahedronGeometry args={[0.13, 0]} />
             <meshStandardMaterial
               color={m.id === "thrombus" || m.id === "plaque" ? "#C21E3A" : "#2DD9E8"}
               emissive={m.id === "thrombus" || m.id === "plaque" ? "#C21E3A" : "#2DD9E8"}
@@ -305,6 +368,65 @@ export function HeartMission({ refs, input, quality }: Props) {
       <hemisphereLight args={["#12182a", "#1a0509", 0.35]} />
       <pointLight position={[0, 1.5, 8]} intensity={2.4 + refs.beat.current * 3.2} distance={34} color="#c21e3a" />
       <pointLight position={[0, 0, -70]} intensity={0.9} distance={40} color="#2DD9E8" />
+      {/* objective beacons: diegetic navigation (spec §9/§33) */}
+      <TargetBeacon t={CLOT_T} color="#ff2e4d" visibleUntilObjective={4} flowRef={refs.flow} />
+      <TargetBeacon t={STABILIZE_T} color="#2DD9E8" visibleWhenObjective={5} flowRef={refs.flow} />
+    </group>
+  );
+}
+
+/** Pulsing waypoint beacon anchored in the vessel flow channel. */
+function TargetBeacon({
+  t,
+  color,
+  visibleUntilObjective,
+  visibleWhenObjective,
+  flowRef,
+}: {
+  t: number;
+  color: string;
+  visibleUntilObjective?: number;
+  visibleWhenObjective?: number;
+  flowRef: React.MutableRefObject<number>;
+}) {
+  const meshRef = useRef<THREE.Group>(null);
+  const haloRef = useRef<THREE.Mesh>(null);
+  const objectives = useGame((s) => s.objectives);
+  const phase = useGame((s) => s.phase);
+
+  const visible =
+    phase === "PLAYING" || phase === "OBJECTIVE_COMPLETE" || phase === "EDUCATION_POPUP"
+      ? visibleUntilObjective !== undefined
+        ? !objectives[visibleUntilObjective].done
+        : visibleWhenObjective !== undefined
+          ? objectives[visibleWhenObjective - 1].done && !objectives[visibleWhenObjective].done
+          : false
+      : false;
+
+  useFrame((state) => {
+    const g = meshRef.current;
+    if (!g) return;
+    const pulse = 1 + Math.sin(state.clock.elapsedTime * 4.2) * 0.22;
+    g.scale.setScalar(pulse);
+    if (haloRef.current) {
+      const hp = (state.clock.elapsedTime * 0.9) % 1;
+      haloRef.current.scale.setScalar(0.5 + hp * 3.2);
+      (haloRef.current.material as THREE.MeshBasicMaterial).opacity = 0.35 * (1 - hp);
+    }
+    offsetPoint(t, 0, 0, flowRef.current, g.position);
+  });
+
+  return (
+    <group ref={meshRef} visible={visible}>
+      <mesh>
+        <octahedronGeometry args={[0.16, 0]} />
+        <meshBasicMaterial color={color} transparent opacity={0.95} />
+      </mesh>
+      <mesh ref={haloRef}>
+        <sphereGeometry args={[0.3, 12, 12]} />
+        <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} />
+      </mesh>
+      <pointLight color={color} intensity={2.2} distance={9} />
     </group>
   );
 }

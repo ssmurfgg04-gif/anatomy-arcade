@@ -31,16 +31,17 @@ export const metadata: Metadata = {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
+    title: "ANATOMY ARCADE",
+    description:
+      "Become a nano-robot, enter the human body, and complete medical missions while learning how your body works.",
+    siteName: "Anatomy Arcade",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
+    title: "ANATOMY ARCADE",
+    description:
+      "Become a nano-robot, enter the human body, and complete medical missions while learning how your body works.",
   },
 };
 

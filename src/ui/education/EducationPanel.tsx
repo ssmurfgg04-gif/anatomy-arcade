@@ -3,7 +3,7 @@
  * Anatomical scan result (spec §21): holographic overlay, Qwen-powered with
  * guaranteed static fallback. Feels native to the game, never a chat window.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGame } from "@/game/core/state";
 import { staticExplain, type ExplainResponse } from "@/game/data/anatomy";
 
@@ -38,7 +38,15 @@ export function EducationPanel() {
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((j: ExplainResponse) => {
-        if (!cancelled && j && j.explanation) setData({ ...j, viaAI: j.viaAI ?? true });
+        if (!cancelled && j && j.explanation) {
+          setData((prev) =>
+            prev
+              ? // keep the static gameplay hint: it is tuned to the mission
+                // and must never be lost to an AI paraphrase
+                { ...j, missionTip: prev.missionTip, viaAI: j.viaAI ?? true }
+              : { ...j, viaAI: j.viaAI ?? true }
+          );
+        }
       })
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
@@ -47,22 +55,25 @@ export function EducationPanel() {
     };
   }, [activeScan, addDiscovery]);
 
-  // typewriter reveal
+  // typewriter reveal — keyed to the scan target, so a late AI-enhanced text
+  // swap continues the reveal instead of restarting it (no layout jank)
+  const revealKey = useRef<string | null>(null);
   useEffect(() => {
     if (!data) return;
-    setLines(0);
+    const key = activeScan?.id ?? "x";
+    if (revealKey.current !== key) {
+      revealKey.current = key;
+      setLines(0);
+    }
     const target = data.explanation.length;
     const id = setInterval(() => {
       setLines((n) => {
-        if (n >= target) {
-          clearInterval(id);
-          return n;
-        }
+        if (n >= target) return n;
         return n + 3;
       });
     }, 16);
     return () => clearInterval(id);
-  }, [data]);
+  }, [data, activeScan?.id]);
 
   if (!activeScan || !data) return null;
 
@@ -88,10 +99,16 @@ export function EducationPanel() {
 
           <div className="my-4 h-px bg-gradient-to-r from-cyan-300/50 via-white/10 to-transparent" />
 
-          <p className="min-h-16 text-[13.5px] leading-relaxed text-white/85">
-            {data.explanation.slice(0, lines)}
-            {lines < data.explanation.length && <span className="animate-pulse text-cyan-300">▌</span>}
-          </p>
+          {/* grid reserves the final text height so the typewriter never shifts layout */}
+          <div className="grid min-h-16">
+            <p className="invisible col-start-1 row-start-1 text-[13.5px] leading-relaxed text-white/85" aria-hidden>
+              {data.explanation}
+            </p>
+            <p className="col-start-1 row-start-1 text-[13.5px] leading-relaxed text-white/85">
+              {data.explanation.slice(0, lines)}
+              {lines < data.explanation.length && <span className="animate-pulse text-cyan-300">▌</span>}
+            </p>
+          </div>
 
           <div className="mt-4 space-y-2.5">
             <div className="border-l-2 border-cyan-300/60 pl-3">

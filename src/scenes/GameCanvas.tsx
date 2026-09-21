@@ -10,6 +10,7 @@ import { useGame } from "@/game/core/state";
 import { QUALITY_PROFILES, detectQualityTier, type QualityTier } from "@/game/core/quality";
 import { createInputState, useKeyboardInput, usePointerLook } from "@/game/controls/input";
 import { TouchControls } from "@/game/controls/TouchControls";
+import { TutorialOverlay } from "@/ui/tutorial/TutorialOverlay";
 import { createHeartRefs, HeartMission, type HeartRefs } from "@/game/levels/heart/HeartMission";
 import { updateHum, startHum, playImpact, playHeartbeat, startAmbience, setAudioVolume } from "@/audio/sfx";
 
@@ -117,6 +118,7 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
         <BeatDriver refs={heartRefs} />
       </Canvas>
       <TouchControls input={input} onPause={onOpenPause} />
+      <TutorialOverlay input={input} />
     </div>
   );
 }

@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { InputState } from "./input";
+import { useGame } from "@/game/core/state";
 
 interface Props {
   input: React.MutableRefObject<InputState>;
@@ -19,6 +20,16 @@ export function TouchControls({ input, onPause }: Props) {
   const lookId = useRef<number | null>(null);
   const lookLast = useRef({ x: 0, y: 0 });
   const [showTouch, setShowTouch] = useState(false);
+  const phase = useGame((s) => s.phase);
+
+  // touch controls only exist during interactive gameplay phases
+  const phaseOk =
+    phase === "PLAYING" ||
+    phase === "SCANNING" ||
+    phase === "INTERACTION" ||
+    phase === "OBJECTIVE_COMPLETE" ||
+    phase === "EDUCATION_POPUP" ||
+    phase === "MISSION_INTRO";
 
   useEffect(() => {
     setShowTouch(
@@ -105,7 +116,7 @@ export function TouchControls({ input, onPause }: Props) {
     };
   }, [input, showTouch]);
 
-  if (!showTouch) return null;
+  if (!showTouch || !phaseOk) return null;
 
   const hold = (key: "tBoost" | "tInteract" | "tScan", value: boolean) => () => {
     input.current[key] = value;
@@ -130,7 +141,11 @@ export function TouchControls({ input, onPause }: Props) {
       <div className="pointer-events-auto absolute bottom-6 right-5 grid grid-cols-2 gap-3 touch-none">
         <button
           className="h-16 w-16 rounded-full border border-cyan-300/40 bg-cyan-400/10 font-mono text-[10px] tracking-widest text-cyan-100 active:bg-cyan-300/30"
-          onPointerDown={hold("tScan", true)}
+          onPointerDown={(e) => {
+            input.current.tScan = true;
+            window.dispatchEvent(new CustomEvent("aa-scan-tap")); // edge-triggered scan
+            void e;
+          }}
           onPointerUp={hold("tScan", false)}
           onPointerLeave={hold("tScan", false)}
         >
