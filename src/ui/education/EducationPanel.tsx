@@ -93,7 +93,7 @@ export function EducationPanel() {
             )}
           </div>
           <h2 className="font-mono text-xl font-semibold tracking-[0.14em] text-white">
-            {data.title}
+            {activeScan.title || data.title}
           </h2>
           <p className="mt-0.5 font-mono text-[11px] tracking-wide text-cyan-100/70">{activeScan.subtitle}</p>
 

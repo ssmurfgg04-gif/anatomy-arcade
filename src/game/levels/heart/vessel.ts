@@ -60,10 +60,64 @@ export function vesselRadiusAt(t: number, cleared: number): number {
 }
 
 export const HEART_OBJECTIVE_ZONES = {
-  locateT: 0.36, // where "LOCATE FLOW ANOMALY" completes on approach
+  navigateT: 0.22, // where "NAVIGATE THE BLOODSTREAM" completes
+  junctionT: 0.3, // branch junction center (LAD vs LCX choice)
+  junctionEndT: 0.4, // "IDENTIFY THE CORONARY ARTERY" completes past the junction
+  locateT: 0.54, // where "LOCATE THE PLAQUE" completes on approach
   plaqueScanT: 0.54,
   clotT0: 0.62,
   clotT1: 0.74,
   restoreT: 0.8,
   stabilizeT: 0.92,
 };
+
+/**
+ * Branch junction (spec: vessels have BRANCHES): at t≈0.30 the artery splits.
+ * The main spline IS the LAD (left anterior descending — the artery that
+ * blocks in the classic heart-attack case). The spur is the LCX (left
+ * circumflex) — a dead-end that teaches "wrong vessel, turn back".
+ */
+export const JUNCTION_T = 0.3;
+
+function buildSpurPoints(): THREE.Vector3[] {
+  const anchor = new THREE.Vector3();
+  vesselAnchor(JUNCTION_T, anchor);
+  const dir = new THREE.Vector3();
+  vesselTangent(JUNCTION_T, dir);
+  // basis for the branch direction (up-right off the main tube)
+  const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+  const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+  const side = right.clone().multiplyScalar(0.85).add(up.clone().multiplyScalar(0.5)).normalize();
+  return [
+    anchor.clone().addScaledVector(dir, -1.2),
+    anchor.clone().addScaledVector(dir, 0.6).addScaledVector(side, 1.4),
+    anchor.clone().addScaledVector(dir, 2.6).addScaledVector(side, 4.2),
+    anchor.clone().addScaledVector(dir, 4.6).addScaledVector(side, 7.2),
+    anchor.clone().addScaledVector(dir, 6.4).addScaledVector(side, 9.8),
+  ];
+}
+
+// imported lazily to avoid a circular import at module scope (vessel.ts in
+// levels/heart exports the control points; systems/vessel builds the curve)
+function vesselAnchor(t: number, out: THREE.Vector3): THREE.Vector3 {
+  // linear interpolation across the raw control points is fine for placement
+  const pts = HEART_VESSEL_POINTS;
+  const f = t * (pts.length - 1);
+  const i = Math.min(pts.length - 2, Math.floor(f));
+  return out.copy(pts[i]).lerp(pts[i + 1], f - i);
+}
+function vesselTangent(t: number, out: THREE.Vector3): THREE.Vector3 {
+  const pts = HEART_VESSEL_POINTS;
+  const f = t * (pts.length - 1);
+  const i = Math.min(pts.length - 2, Math.floor(f));
+  return out.subVectors(pts[i + 1], pts[i]).normalize();
+}
+
+export const spurCurve = new THREE.CatmullRomCurve3(buildSpurPoints(), false, "catmullrom", 0.5);
+export const SPUR_BASE_RADIUS = 1.35;
+export const SPUR_LEN = spurCurve.getLength();
+
+/** Radius along the spur: tapers closed toward the dead end. */
+export function spurRadiusAt(t: number): number {
+  return 1 - 0.62 * Math.pow(THREE.MathUtils.clamp(t, 0, 1), 1.4);
+}

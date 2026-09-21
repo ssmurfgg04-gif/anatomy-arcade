@@ -136,7 +136,12 @@ export function MissionBriefing() {
 
         <button
           className="group relative mt-5 w-full overflow-hidden rounded-sm border border-cyan-300/60 bg-cyan-400/10 py-4 font-mono text-sm tracking-[0.35em] text-cyan-100 transition-all duration-300 hover:bg-cyan-300/25 hover:shadow-[0_0_40px_rgba(45,217,232,0.35)]"
-          onClick={() => setPhase("MISSION_INTRO")}
+          onClick={() => {
+            // stage 01 REVIEW PATIENT VITALS: briefed = done (silent — the
+            // intro cinematic immediately follows, no banner detour)
+            useGame.getState().completeObjectiveSilent(0);
+            setPhase("MISSION_INTRO");
+          }}
         >
           <span className="relative z-10">BEGIN MISSION</span>
           <span className="absolute inset-y-0 left-0 w-1 bg-cyan-300 shadow-[0_0_12px_rgba(45,217,232,1)] transition-all duration-300 group-hover:w-1.5" />
@@ -299,6 +304,25 @@ export function MissionFailed() {
   );
 }
 
+/** The biology principle each mission teaches (spec §36 — results = the lesson). */
+const MISSION_LESSONS: Record<MissionId, { term: string; body: string; chips: string[] }> = {
+  heart: {
+    term: "ISCHEMIA → REPERFUSION",
+    body: "Coronary arteries feed the heart muscle ITSELF. When plaque ruptures and a clot blocks the LAD, muscle downstream is starved of oxygen — that starvation is ischemia. Clearing the clot restores reperfusion: every minute saved is living muscle. Time is muscle.",
+    chips: ["Coronary artery", "Plaque", "Thrombus", "Ischemia", "Reperfusion"],
+  },
+  viral: {
+    term: "ANTIGEN → ANTIBODY",
+    body: "Viruses hijack cell machinery to copy themselves. Infected cells display viral antigens on their surface — the flag the immune system uses to find them. Antibodies mark infected cells so white blood cells can destroy them.",
+    chips: ["Antigen", "Antibody", "White blood cell"],
+  },
+  brain: {
+    term: "ACTION POTENTIAL",
+    body: "Neurons talk in electrical spikes. A neuron fires when charge difference across its membrane flips — an action potential — jumping the synapse with neurotransmitters to reach the next cell.",
+    chips: ["Neuron", "Synapse", "Neurotransmitter"],
+  },
+};
+
 export function Results() {
   const missionTime = useGame((s) => s.missionTime);
   const patientStatus = useGame((s) => s.patientStatus);
@@ -308,10 +332,12 @@ export function Results() {
   const setPhase = useGame((s) => s.setPhase);
   const resetMission = useGame((s) => s.resetMission);
   const setUiOverlay = useGame((s) => s.setUiOverlay);
+  const mission = useGame((s) => s.mission);
 
   const accuracy = Math.max(0, Math.round(playerHealth));
   const rank = score > 4200 ? "S" : score > 3400 ? "A" : score > 2600 ? "B" : "C";
   const lessons = discoveries.slice(0, 3);
+  const lesson = MISSION_LESSONS[mission];
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-[#04070c]/88 px-6 py-8 backdrop-blur-sm">
@@ -350,6 +376,22 @@ export function Results() {
             </div>
           </div>
         )}
+
+        {/* the biology principle — what the mission actually taught (spec §36) */}
+        <div className="mt-5 rounded-sm border border-amber-300/25 bg-amber-400/5 px-4 py-3">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[9px] tracking-[0.4em] text-amber-200/90">THE BIOLOGY</span>
+            <span className="font-mono text-[9px] tracking-[0.3em] text-amber-200/60">{lesson.term}</span>
+          </div>
+          <p className="mt-2 text-[13px] leading-relaxed text-white/80">{lesson.body}</p>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {lesson.chips.map((c) => (
+              <span key={c} className="rounded-sm border border-white/15 bg-white/5 px-2 py-0.5 font-mono text-[9px] tracking-[0.2em] text-white/60">
+                {c.toUpperCase()}
+              </span>
+            ))}
+          </div>
+        </div>
 
         <div className="mt-6 space-y-2.5 font-mono text-xs">
           {[

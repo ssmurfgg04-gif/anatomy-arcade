@@ -25,11 +25,18 @@ function damageAt(t: number): number {
   return 0;
 }
 
-function buildVesselGeometry(segments: number): THREE.BufferGeometry {
-  const positions = new Float32Array((segments + 1) * RADIAL * 3);
-  const normals = new Float32Array((segments + 1) * RADIAL * 3);
-  const uvs = new Float32Array((segments + 1) * RADIAL * 2);
-  const damage = new Float32Array((segments + 1) * RADIAL);
+export function buildTubeGeometry(
+  curve: THREE.CatmullRomCurve3,
+  segments: number,
+  radiusMulAt: (t: number) => number,
+  damageFn: (t: number) => number,
+  baseRadius = VESSEL_BASE_RADIUS,
+  radial = RADIAL
+): THREE.BufferGeometry {
+  const positions = new Float32Array((segments + 1) * radial * 3);
+  const normals = new Float32Array((segments + 1) * radial * 3);
+  const uvs = new Float32Array((segments + 1) * radial * 2);
+  const damage = new Float32Array((segments + 1) * radial);
 
   const tan = new THREE.Vector3();
   const right = new THREE.Vector3();
@@ -42,18 +49,18 @@ function buildVesselGeometry(segments: number): THREE.BufferGeometry {
   let ptr = 0;
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
-    vesselCurve.getPointAt(t, center);
-    vesselCurve.getTangentAt(t, tan);
+    curve.getPointAt(t, center);
+    curve.getTangentAt(t, tan);
     right.crossVectors(tan, UP);
     if (right.lengthSq() < 0.001) right.set(1, 0, 0);
     right.normalize();
     up.crossVectors(right, tan).normalize();
 
-    const baseR = VESSEL_BASE_RADIUS * vesselRadiusAt(t, 0);
-    const dmg = damageAt(t);
+    const baseR = baseRadius * radiusMulAt(t);
+    const dmg = damageFn(t);
 
-    for (let j = 0; j < RADIAL; j++) {
-      const a = (j / RADIAL) * Math.PI * 2;
+    for (let j = 0; j < radial; j++) {
+      const a = (j / radial) * Math.PI * 2;
       // organic wall unevenness — stronger where damaged
       const n =
         1 +
@@ -72,7 +79,7 @@ function buildVesselGeometry(segments: number): THREE.BufferGeometry {
       normals[ptr * 3 + 1] = -Math.cos(a) * right.y - Math.sin(a) * up.y;
       normals[ptr * 3 + 2] = -Math.cos(a) * right.z - Math.sin(a) * up.z;
       uvs[ptr * 2] = t * 8;
-      uvs[ptr * 2 + 1] = j / RADIAL;
+      uvs[ptr * 2 + 1] = j / radial;
       damage[ptr] = dmg;
       ptr++;
     }
@@ -80,11 +87,11 @@ function buildVesselGeometry(segments: number): THREE.BufferGeometry {
 
   const indices: number[] = [];
   for (let i = 0; i < segments; i++) {
-    for (let j = 0; j < RADIAL; j++) {
-      const a = i * RADIAL + j;
-      const b = i * RADIAL + ((j + 1) % RADIAL);
-      const c = (i + 1) * RADIAL + j;
-      const d = (i + 1) * RADIAL + ((j + 1) % RADIAL);
+    for (let j = 0; j < radial; j++) {
+      const a = i * radial + j;
+      const b = i * radial + ((j + 1) % radial);
+      const c = (i + 1) * radial + j;
+      const d = (i + 1) * radial + ((j + 1) % radial);
       indices.push(a, b, d, a, d, c);
     }
   }
@@ -96,6 +103,10 @@ function buildVesselGeometry(segments: number): THREE.BufferGeometry {
   geo.setAttribute("aDamage", new THREE.BufferAttribute(damage, 1));
   geo.setIndex(indices);
   return geo;
+}
+
+function buildVesselGeometry(segments: number): THREE.BufferGeometry {
+  return buildTubeGeometry(vesselCurve, segments, (t) => vesselRadiusAt(t, 0), damageAt);
 }
 
 const VERT = /* glsl */ `
@@ -172,6 +183,8 @@ const FRAG = /* glsl */ `
   }
   #endif
 `;
+
+export { VERT as TUBE_VERT, FRAG as TUBE_FRAG };
 
 interface Props {
   flowRef: React.MutableRefObject<number>;

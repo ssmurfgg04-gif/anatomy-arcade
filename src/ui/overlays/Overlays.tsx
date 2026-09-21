@@ -161,6 +161,14 @@ export function Credits() {
           </p>
         </div>
         <div>
+          <div className="font-mono text-[9px] tracking-[0.35em] text-cyan-200/70">3D MODELS</div>
+          <p className="mt-1.5">
+            Anatomical heart, coronary artery and body-silhouette meshes based on{" "}
+            <span className="text-white/90">BodyParts3D</span>, © The Database Center for Life
+            Science, licensed under CC BY 4.0 (used with modification and decimation).
+          </p>
+        </div>
+        <div>
           <div className="font-mono text-[9px] tracking-[0.35em] text-cyan-200/70">EDUCATION</div>
           <p className="mt-1.5">
             All anatomical explanations are reviewed against public medical education material and

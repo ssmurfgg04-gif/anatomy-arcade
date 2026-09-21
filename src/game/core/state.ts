@@ -112,23 +112,37 @@ interface GameState {
   setUiOverlay: (o: UiOverlay) => void;
   setTutorialDone: (v: boolean) => void;
   failMission: (reason: Exclude<FailReason, null>) => void;
+  completeObjectiveSilent: (index: number) => void;
 }
 
 /** Human-facing situation line under each objective (the WHY, spec §45). */
 export const OBJECTIVE_WHY: Record<string, string> = {
+  brief: "Know the patient, the threat and your tools before the clock starts.",
   enter: "The nano-robot has been injected into the coronary artery.",
-  locate: "Turbulence ahead means something is obstructing the channel.",
+  navigate: "Follow the flow — healthy channels carry cells at speed.",
+  identify: "Coronary arteries feed the heart muscle itself. The LAD runs down the front wall.",
   scan: "Identify the obstruction before attempting treatment.",
+  locate: "The beacon marks where the flow signal goes dark.",
+  analyze: "A scanner readout tells you what you are dealing with — and how bad it is.",
   clear: "The clot is starving heart muscle of oxygen. Dissolve it.",
   restore: "Blood must reach the tissue downstream of the clot.",
   stabilize: "Hold position while the heart rhythm normalizes.",
 };
 
+/**
+ * Heart mission = the spec §25 ten-stage arc (brief → entry → navigation →
+ * branch identification → scanner calibration → plaque → analysis → treatment
+ * → reperfusion → stabilization). Each stage is one objective row.
+ */
 const MISSION_OBJECTIVES: Record<MissionId, { id: string; label: string }[]> = {
   heart: [
-    { id: "enter", label: "ENTER VASCULAR SYSTEM" },
-    { id: "locate", label: "LOCATE FLOW ANOMALY" },
-    { id: "scan", label: "SCAN THE BLOCKAGE" },
+    { id: "brief", label: "REVIEW PATIENT VITALS" },
+    { id: "enter", label: "ENTER CIRCULATORY SYSTEM" },
+    { id: "navigate", label: "NAVIGATE THE BLOODSTREAM" },
+    { id: "identify", label: "IDENTIFY THE CORONARY ARTERY" },
+    { id: "scan", label: "CALIBRATE THE SCANNER" },
+    { id: "locate", label: "LOCATE THE PLAQUE" },
+    { id: "analyze", label: "ANALYZE THE BLOCKAGE" },
     { id: "clear", label: "DISSOLVE THE CLOT" },
     { id: "restore", label: "RESTORE BLOOD FLOW" },
     { id: "stabilize", label: "STABILIZE THE HEART" },
@@ -214,6 +228,18 @@ export const useGame = create<GameState>((set, get) => ({
         i === index ? { ...o, progress: Math.min(1, Math.max(0, progress)) } : o
       ),
     })),
+
+/** Marks an objective done with zero side effects (no banner, no score). */
+  completeObjectiveSilent: (index) =>
+    set((s) =>
+      s.objectives[index]?.done
+        ? {}
+        : {
+            objectives: s.objectives.map((o, i) =>
+              i === index ? { ...o, done: true, progress: 1 } : o
+            ),
+          }
+    ),
 
   completeObjective: (index) => {
     const s = get();
@@ -308,8 +334,8 @@ export const useGame = create<GameState>((set, get) => ({
             failReason: reason,
             // how close the player got: keeps failure instructive, not punishing
             failProgress:
-              s.objectives[3]?.progress != null && s.objectives[3].progress > 0
-                ? s.objectives[3].progress
+              s.objectives[7]?.progress != null && s.objectives[7].progress > 0
+                ? s.objectives[7].progress
                 : -1,
           }
     ),

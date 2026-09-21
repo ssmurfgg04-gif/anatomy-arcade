@@ -9,11 +9,25 @@ import { useEffect, useRef, useState } from "react";
 import { useGame } from "@/game/core/state";
 import { ANATOMY, MICRO_FACTS } from "@/game/data/anatomy";
 import type { HeartRefs } from "@/game/levels/heart/HeartMission";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 function fmtTime(s: number) {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+/** Spec §34 progress tech: `██████░░░░ 60%` block bar. */
+function BlockBar({ p, className = "" }: { p: number; className?: string }) {
+  const cells = 10;
+  const filled = Math.round(Math.min(1, Math.max(0, p)) * cells);
+  return (
+    <span className={`font-mono tabular-nums ${className}`} aria-label={`${Math.round(p * 100)}%`}>
+      <span className="text-cyan-300">{"\u2588".repeat(filled)}</span>
+      <span className="text-white/25">{"\u2591".repeat(cells - filled)}</span>
+      <span className="ml-1.5 text-white/70">{Math.round(p * 100)}%</span>
+    </span>
+  );
 }
 
 /** Polls the live distance-to-beacon ref (kept out of zustand: no per-frame rerenders). */
@@ -71,10 +85,30 @@ export function HUD({ onPause }: { onPause: () => void }) {
   const currentObjective = useGame((s) => s.currentObjective);
   const toast = useGame((s) => s.discoveryToast);
   const dismissToast = useGame((s) => s.dismissToast);
+  const isMobile = useIsMobile();
   const beatRef = useRef<HTMLDivElement>(null);
   const damageRef = useRef<HTMLDivElement>(null);
   const reticleRef = useRef<HTMLDivElement>(null);
+  const branchWarnRef = useRef<HTMLDivElement>(null);
   const lastHealth = useRef(100);
+
+  // wrong-branch guidance (stage 04): the LCX spur teaches by nudging, not punishing
+  useEffect(() => {
+    const onWrong = () => {
+      const el = branchWarnRef.current;
+      if (!el) return;
+      el.style.opacity = "1";
+      el.style.transform = "translate(-50%, 0)";
+      setTimeout(() => {
+        if (el) {
+          el.style.opacity = "0";
+          el.style.transform = "translate(-50%, -6px)";
+        }
+      }, 3200);
+    };
+    window.addEventListener("aa-wrong-branch", onWrong);
+    return () => window.removeEventListener("aa-wrong-branch", onWrong);
+  }, []);
 
   // reticle treatment feedback: amber when aimed at clot, pulse while dissolving
   useEffect(() => {
@@ -133,17 +167,27 @@ export function HUD({ onPause }: { onPause: () => void }) {
   const inGame = phase === "PLAYING" || phase === "SCANNING" || phase === "INTERACTION" || phase === "OBJECTIVE_COMPLETE" || phase === "EDUCATION_POPUP";
 
   const cur = objectives[currentObjective];
-  const dist = useTargetDist(!!cur && ["locate", "scan", "clear", "stabilize"].includes(cur.id));
+  const dist = useTargetDist(
+    !!cur && ["navigate", "identify", "scan", "locate", "analyze", "clear", "stabilize"].includes(cur.id)
+  );
 
   if (!inGame) return null;
 
   const distLabel = dist >= 0 ? `${Math.max(0, Math.round(dist))}m` : null;
 
   // contextual action hint: the exact input needed for the current objective
+  // (desktop shows the key, mobile names the button — spec §35)
   let actionHint: string | null = null;
   if (cur) {
-    if (cur.id === "scan") actionHint = "AIM AT A GLOWING MARKER — PRESS Q TO SCAN";
-    else if (cur.id === "clear") actionHint = "HOLD E ON THE CLOT TO DISSOLVE IT";
+    if (cur.id === "navigate") actionHint = "FOLLOW THE FLOW — REACH THE CYAN BEACON";
+    else if (cur.id === "identify") actionHint = "BRANCH AHEAD — TAKE THE LAD CHANNEL";
+    else if (cur.id === "scan")
+      actionHint = isMobile ? "AIM AT A GLOWING MARKER — TAP SCAN" : "AIM AT A GLOWING MARKER — PRESS [Q] TO SCAN";
+    else if (cur.id === "locate") actionHint = "THE PLAQUE ZONE IS AHEAD — FOLLOW THE AMBER BEACON";
+    else if (cur.id === "analyze")
+      actionHint = isMobile ? "AIM AT THE CLOT — TAP SCAN TO ANALYZE" : "AIM AT THE CLOT — PRESS [Q] TO ANALYZE";
+    else if (cur.id === "clear")
+      actionHint = isMobile ? "HOLD TREAT ON THE CLOT TO DISSOLVE IT" : "HOLD [E] ON THE CLOT TO DISSOLVE IT";
     else if (cur.id === "stabilize") actionHint = "HOLD POSITION INSIDE THE CYAN RING";
   }
 
@@ -194,17 +238,33 @@ export function HUD({ onPause }: { onPause: () => void }) {
       <div className="absolute left-1/2 top-[calc(max(env(safe-area-inset-top),14px)+46px)] w-[min(70vw,20rem)] -translate-x-1/2 md:hidden">
         <div className="rounded-sm border border-white/12 bg-black/50 px-3 py-2 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-[9px] tracking-[0.3em] text-cyan-200/80">OBJECTIVE</span>
+            <span className="font-mono text-[9px] tracking-[0.3em] text-cyan-200/80">
+              OBJECTIVE {currentObjective + 1}/{objectives.length}
+            </span>
             {distLabel && <span className="font-mono text-[9px] tabular-nums text-amber-200/90">{distLabel}</span>}
           </div>
           <div className="mt-0.5 font-mono text-[11px] leading-tight tracking-wide text-white/90">
             {cur ? cur.label : "MISSION COMPLETE"}
           </div>
           {cur && cur.progress > 0 && cur.progress < 1 && (
-            <div className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-cyan-300 transition-all" style={{ width: `${cur.progress * 100}%` }} />
+            <div className="mt-1.5 text-[10px]">
+              <BlockBar p={cur.progress} />
             </div>
           )}
+        </div>
+      </div>
+
+      {/* wrong-branch guidance (stage 04) */}
+      <div
+        ref={branchWarnRef}
+        className="absolute left-1/2 top-[38%] -translate-x-1/2 opacity-0 transition-all duration-300"
+        style={{ transform: "translate(-50%, -6px)" }}
+      >
+        <div className="rounded-sm border border-rose-300/50 bg-[#1a040a]/85 px-4 py-2 text-center backdrop-blur-sm">
+          <div className="font-mono text-[10px] tracking-[0.3em] text-rose-300">LCX — LEFT CIRCUMFLEX</div>
+          <div className="mt-0.5 font-mono text-[11px] tracking-widest text-white/85">
+            THIS VESSEL IS CLEAR. THE BLOCKAGE IS IN THE LAD — TURN BACK.
+          </div>
         </div>
       </div>
 
@@ -229,8 +289,10 @@ export function HUD({ onPause }: { onPause: () => void }) {
       )}
 
       {/* objective panel — right side (desktop) */}
-      <div className="absolute right-5 top-1/2 hidden w-56 -translate-y-1/2 sm:right-8 md:block">
-        <div className="mb-2 font-mono text-[9px] tracking-[0.35em] text-cyan-200/70">OBJECTIVE</div>
+      <div className="absolute right-5 top-1/2 hidden w-60 -translate-y-1/2 sm:right-8 md:block">
+        <div className="mb-2 font-mono text-[9px] tracking-[0.35em] text-cyan-200/70">
+          OBJECTIVE {currentObjective + 1}/{objectives.length}
+        </div>
         <div className="font-mono text-[13px] leading-snug tracking-wide text-white/90">
           {cur ? cur.label : "MISSION COMPLETE"}
         </div>
@@ -241,8 +303,8 @@ export function HUD({ onPause }: { onPause: () => void }) {
           </div>
         )}
         {cur && cur.progress > 0 && cur.progress < 1 && (
-          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(45,217,232,0.7)] transition-all" style={{ width: `${cur.progress * 100}%` }} />
+          <div className="mt-2 text-[11px]">
+            <BlockBar p={cur.progress} />
           </div>
         )}
         <div className="mt-4 space-y-1.5">
@@ -281,13 +343,13 @@ export function HUD({ onPause }: { onPause: () => void }) {
         WASD MOVE &nbsp;·&nbsp; SHIFT BOOST &nbsp;·&nbsp; Q SCAN &nbsp;·&nbsp; E TREAT
       </div>
 
-      {/* discovery toast */}
+      {/* discovery toast — BioDex reward language (spec §36) */}
       {toast && (
         <div className="absolute bottom-40 left-1/2 -translate-x-1/2 sm:bottom-36">
           <div className="flex items-center gap-3 rounded-sm border border-cyan-300/40 bg-black/60 px-4 py-2.5 backdrop-blur-md">
             <span className="inline-block h-2 w-2 rotate-45 bg-cyan-300 shadow-[0_0_10px_rgba(45,217,232,1)]" />
             <div>
-              <div className="font-mono text-[9px] tracking-[0.3em] text-cyan-200/80">DISCOVERY +150 XP</div>
+              <div className="font-mono text-[9px] tracking-[0.3em] text-cyan-200/80">NEW BIODex ENTRY · +150 BIO XP</div>
               <div className="font-mono text-xs tracking-widest text-white/90">
                 {ANATOMY[toast.id]?.title ?? toast.title}
               </div>

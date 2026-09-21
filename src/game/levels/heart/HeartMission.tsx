@@ -4,18 +4,26 @@
  * Assembles vessel + cells + obstructions + player; drives objectives,
  * heartbeat, flow restoration, scan raycasting and the mission payoff.
  */
-import { useEffect as useEffectReact, useMemo, useRef } from "react";
+import { useEffect as useEffectReact, useMemo, useRef, Suspense } from "react";
 import * as THREE from "three";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame, useThree, useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useGame } from "@/game/core/state";
 import type { InputState } from "@/game/controls/input";
 import { vesselCurve, offsetPoint } from "@/game/systems/vessel";
 import { VesselTube } from "./VesselTube";
 import { BloodCells } from "./BloodCells";
 import { Obstructions, type ClotSegment } from "./Obstructions";
+import { Junction } from "./Junction";
 import { Player, createPlayerRefs } from "./Player";
-import { HEART_OBJECTIVE_ZONES, vesselRadiusAt, VESSEL_BASE_RADIUS } from "./vessel";
-import { playLockOn, playDissolveTick, playFlowRestored } from "@/audio/sfx";
+import {
+  HEART_OBJECTIVE_ZONES,
+  vesselRadiusAt,
+  VESSEL_BASE_RADIUS,
+  spurCurve,
+  SPUR_BASE_RADIUS,
+} from "./vessel";
+import { playLockOn, playDissolveTick, playFlowRestored, playBlip } from "@/audio/sfx";
 
 const _center = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -57,6 +65,15 @@ const VESSEL_LEN = vesselCurve.getLength();
 const CLOT_T = 0.68;
 const STABILIZE_T = 0.92;
 
+// stage targets along t (HUD beacons + completion zones, spec §25 10-stage arc)
+const NAVIGATE_T = HEART_OBJECTIVE_ZONES.navigateT;
+const JUNCTION_END_T = HEART_OBJECTIVE_ZONES.junctionEndT;
+const CALIBRATE_T = 0.33; // scanner calibration marker (red blood cell POI)
+const LOCATE_T = HEART_OBJECTIVE_ZONES.locateT;
+
+// spur dead-end sampling for the soft "wrong vessel" wall
+const SPUR_SAMPLES = Array.from({ length: 10 }, (_, i) => spurCurve.getPointAt(0.05 + (i / 9) * 0.9));
+
 interface Props {
   refs: HeartRefs;
   input: React.MutableRefObject<InputState>;
@@ -73,6 +90,7 @@ export function HeartMission({ refs, input, quality }: Props) {
   const scanTap = useRef(false); // edge-triggered scan (never missed at low fps)
   const aimClot = useRef(false); // reticle currently on a clot segment
   const dissolveTick = useRef(0); // last played dissolve bucket (0..3)
+  const wrongBranchAt = useRef(-10); // last wrong-branch warning time
 
   // scan taps arrive via keyboard events / touch button events, not polling
   useEffectReact(() => {
@@ -135,7 +153,7 @@ export function HeartMission({ refs, input, quality }: Props) {
         refs.player.yaw = Math.atan2(-dirV.x, -dirV.z);
         refs.player.pitch = 0;
         refs.player.vel.set(0, 0, 0);
-        g.completeObjective(0); // 01 ENTER VASCULAR SYSTEM
+        g.completeObjective(1); // 02 ENTER CIRCULATORY SYSTEM
         g.addScore(200);
       }
     }
@@ -158,16 +176,65 @@ export function HeartMission({ refs, input, quality }: Props) {
     }
 
     // ---- target guidance: distance to the active beacon along the vessel path ----
-    if (!g.objectives[4].done) {
-      refs.targetDist.current = Math.max(0, (CLOT_T - refs.player.t) * VESSEL_LEN);
-    } else if (!g.objectives[5].done) {
-      refs.targetDist.current = Math.max(0, (STABILIZE_T - refs.player.t) * VESSEL_LEN);
+    const t10 = refs.player.t;
+    if (!g.objectives[2].done) {
+      refs.targetDist.current = Math.max(0, (NAVIGATE_T - t10) * VESSEL_LEN);
+    } else if (!g.objectives[3].done) {
+      refs.targetDist.current = Math.max(0, (JUNCTION_END_T - t10) * VESSEL_LEN);
+    } else if (!g.objectives[4].done) {
+      refs.targetDist.current = Math.max(0, (CALIBRATE_T - t10) * VESSEL_LEN);
+    } else if (!g.objectives[9].done) {
+      refs.targetDist.current = Math.max(0, (t10 < CLOT_T ? CLOT_T - t10 : 0) * VESSEL_LEN + (t10 >= STABILIZE_T ? 0 : Math.max(0, (STABILIZE_T - t10) * VESSEL_LEN)));
     } else {
       refs.targetDist.current = -1;
     }
 
+    // ---- stage 02: NAVIGATE THE BLOODSTREAM (first checkpoint) ----
+    if (!g.objectives[2].done) {
+      g.setObjectiveProgress(2, Math.min(1, t10 / NAVIGATE_T));
+      if (t10 >= NAVIGATE_T) g.completeObjective(2);
+    }
+
+    // ---- stage 03: IDENTIFY THE CORONARY ARTERY (branch junction) ----
+    if (!g.objectives[3].done) {
+      if (t10 >= JUNCTION_END_T) {
+        g.completeObjective(3);
+        g.addScore(250);
+      }
+    }
+
+    // ---- LCX spur soft wall: the branch is a dead end, nudge the player back ----
+    {
+      let minD = Infinity;
+      let nearest: THREE.Vector3 | null = null;
+      for (const p of SPUR_SAMPLES) {
+        const d = p.distanceToSquared(refs.player.pos);
+        if (d < minD) {
+          minD = d;
+          nearest = p;
+        }
+      }
+      if (nearest && minD < (SPUR_BASE_RADIUS * 1.05) ** 2) {
+        const push = _dir.subVectors(refs.player.pos, nearest).normalize();
+        refs.player.pos.addScaledVector(push, 0.12);
+        const inward = refs.player.vel.dot(push);
+        if (inward < 0) refs.player.vel.addScaledVector(push, -inward * 1.4);
+        const st = useGame.getState();
+        if (st.phase === "PLAYING" && !st.objectives[3].done) {
+          const now = state.clock.elapsedTime;
+          if (now - wrongBranchAt.current > 3.2) {
+            wrongBranchAt.current = now;
+            playBlip(180, 0.2, 0.1);
+            window.dispatchEvent(new CustomEvent("aa-wrong-branch"));
+          }
+        }
+      }
+    }
+
+    // ---- stage 04: CALIBRATE THE SCANNER — completes in page.tsx on first scan ----
+
     // ---- aim-at-clot detection: spatial reticle feedback (cause <-> effect) ----
-    const treatPhase = g.objectives[2].done && !g.objectives[3].done;
+    const treatPhase = g.objectives[6].done && !g.objectives[7].done;
     if (treatPhase) {
       RAY.setFromCamera(new THREE.Vector2(0, 0), camera);
       let aiming = false;
@@ -191,14 +258,15 @@ export function HeartMission({ refs, input, quality }: Props) {
       window.dispatchEvent(new CustomEvent("aa-aim-clot", { detail: { aiming: false } }));
     }
 
-    // ---- objective 02: LOCATE FLOW ANOMALY (reach the narrowing) ----
-    if (!g.objectives[1].done && refs.player.t >= HEART_OBJECTIVE_ZONES.locateT) {
-      g.completeObjective(1);
+    // ---- objective 02→05 progression along the artery ----
+    // stage 05 LOCATE THE PLAQUE — approach the damaged stretch
+    if (!g.objectives[5].done && t10 >= LOCATE_T) {
+      g.completeObjective(5);
+      g.addScore(150);
     }
 
-    // ---- objective 03: SCAN THE BLOCKAGE ----
-    if (g.objectives[2].done && !g.objectives[3].done) {
-      // 04 BREAK DOWN THE CLOT: hold interact while reticle on clot segments
+    // ---- stage 07: DISSOLVE THE CLOT (hold interact while reticle on clot) ----
+    if (g.objectives[6].done && !g.objectives[7].done) {
       const holding = input.current.interact || input.current.tInteract;
       if (holding) {
         let dissolvedThisFrame = 0;
@@ -211,7 +279,7 @@ export function HeartMission({ refs, input, quality }: Props) {
           if (hit.length > 0) {
             seg.hp = Math.max(0, seg.hp - dt * 0.34);
             dissolvedThisFrame += dt * 0.34;
-            g.setObjectiveProgress(3, 1 - refs.clot.current.reduce((a, s) => a + s.hp, 0) / refs.clot.current.length);
+            g.setObjectiveProgress(7, 1 - refs.clot.current.reduce((a, s) => a + s.hp, 0) / refs.clot.current.length);
           }
         }
         if (dissolvedThisFrame > 0) {
@@ -230,24 +298,24 @@ export function HeartMission({ refs, input, quality }: Props) {
         }
       }
       const allClear = refs.clot.current.every((s) => s.hp <= 0);
-      if (allClear && !g.objectives[3].done) {
+      if (allClear && !g.objectives[7].done) {
         dissolveTick.current = 0;
-        g.completeObjective(3);
+        g.completeObjective(7);
       }
     }
 
-    // ---- objective 05: RESTORE BLOOD FLOW (ramps after clot cleared) ----
-    if (g.objectives[3].done && !g.objectives[4].done) {
+    // ---- stage 08: RESTORE BLOOD FLOW (ramps after clot cleared) ----
+    if (g.objectives[7].done && !g.objectives[8].done) {
       const f = Math.min(1, refs.flow.current + dt * 0.22);
       refs.flow.current = f;
       g.setFlowHealth(f);
       g.setPatientStatus(62 + f * 30);
       if (f >= 0.98) {
         playFlowRestored(); // payoff arpeggio (L19)
-        g.completeObjective(4);
+        g.completeObjective(8);
         g.addScore(800);
       }
-    } else if (!g.objectives[3].done) {
+    } else if (!g.objectives[7].done) {
       // partial flow recovery as clot segments die
       const dead = refs.clot.current.filter((s) => s.hp <= 0).length;
       const partial = dead / refs.clot.current.length * 0.28;
@@ -255,15 +323,15 @@ export function HeartMission({ refs, input, quality }: Props) {
       g.setFlowHealth(refs.flow.current);
     }
 
-    // ---- objective 06: STABILIZE THE HEART (hold in the post zone) ----
-    if (g.objectives[4].done && !g.objectives[5].done) {
+    // ---- stage 09: STABILIZE THE HEART (hold in the post zone) ----
+    if (g.objectives[8].done && !g.objectives[9].done) {
       if (refs.player.t >= HEART_OBJECTIVE_ZONES.stabilizeT) {
         stabilizeHold.current += dt;
-        g.setObjectiveProgress(5, stabilizeHold.current / 4);
+        g.setObjectiveProgress(9, stabilizeHold.current / 4);
         g.setPatientStatus(92 + stabilizeHold.current / 4 * 8);
         if (stabilizeHold.current >= 4) {
           g.setPatientStatus(100);
-          g.completeObjective(5);
+          g.completeObjective(9);
           g.addScore(1200);
           // mission complete lands after the banner (UI shell handles)
           setTimeout(() => {
@@ -273,7 +341,7 @@ export function HeartMission({ refs, input, quality }: Props) {
         }
       } else {
         stabilizeHold.current = Math.max(0, stabilizeHold.current - dt * 0.5);
-        g.setObjectiveProgress(5, stabilizeHold.current / 4);
+        g.setObjectiveProgress(9, stabilizeHold.current / 4);
       }
     }
 
@@ -302,8 +370,11 @@ export function HeartMission({ refs, input, quality }: Props) {
     }
 
     // ambient patient drift while blocked (urgency, spec §24)
-    if (!g.objectives[4].done) {
-      g.setPatientStatus(g.patientStatus - dt * 0.12);
+    // reads FRESH state: the restore ramp above mutates the store mid-frame,
+    // and a stale snapshot here would overwrite the ramp's vitals every frame
+    const liveG = useGame.getState();
+    if (!liveG.objectives[8].done) {
+      g.setPatientStatus(liveG.patientStatus - dt * 0.12);
     }
   });
 
@@ -312,6 +383,7 @@ export function HeartMission({ refs, input, quality }: Props) {
     () => [
       { t: 0.12, angle: 2.6, dist: 0.72, id: "vesselWall", organ: "artery wall" },
       { t: 0.33, angle: 0.8, dist: 0.5, id: "redBloodCell", organ: "red blood cell" },
+      { t: 0.345, angle: 1.9, dist: 0.58, id: "coronaryArtery", organ: "coronary artery" },
       { t: 0.5, angle: -2.2, dist: 0.55, id: "platelet", organ: "platelet" },
       { t: 0.55, angle: 2.2, dist: 0.62, id: "plaque", organ: "cholesterol plaque" },
       { t: 0.68, angle: 1.2, dist: 0.5, id: "thrombus", organ: "blood clot" },
@@ -336,6 +408,37 @@ export function HeartMission({ refs, input, quality }: Props) {
       refs.player.yaw = Math.PI;
       refs.player.pitch = 0;
     };
+    // warp to a raw world position (spur dead-end testing)
+    w.__aaWarp = (x: number, y: number, z: number) => {
+      refs.player.pos.set(x, y, z);
+      refs.player.vel.set(0, 0, 0);
+      refs.player.t = 0.31;
+    };
+    // aim at a raw world position (junction/heart visual QA)
+    w.__aaAimWorld = (x: number, y: number, z: number) => {
+      const target = new THREE.Vector3(x, y, z);
+      const d = new THREE.Vector3().subVectors(target, refs.player.pos);
+      const len = d.length();
+      if (len < 0.001) return;
+      refs.player.pitch = Math.asin(THREE.MathUtils.clamp(d.y / len, -1, 1));
+      refs.player.yaw = Math.atan2(-d.x, -d.z);
+      const inp = (window as unknown as { __aaInput?: { current: { lookDX: number; lookDY: number; tLookDX: number; tLookDY: number } } }).__aaInput?.current;
+      if (inp) {
+        inp.lookDX = 0;
+        inp.lookDY = 0;
+        inp.tLookDX = 0;
+        inp.tLookDY = 0;
+      }
+    };
+    // aim at the hero heart (end of artery payoff QA)
+    w.__aaAimHeart = () => {
+      const end = new THREE.Vector3();
+      const tan = new THREE.Vector3();
+      vesselCurve.getPointAt(1, end);
+      vesselCurve.getTangentAt(1, tan);
+      const p = end.addScaledVector(tan, 11).add(new THREE.Vector3(0, 0.5, 0));
+      (w.__aaAimWorld as (x: number, y: number, z: number) => void)(p.x, p.y, p.z);
+    };
     w.__aaAimAt = (t: number, ang: number, dist: number) => {
       const target = offsetPoint(t, ang, dist, 0);
       const d = new THREE.Vector3().subVectors(target, refs.player.pos);
@@ -354,13 +457,19 @@ export function HeartMission({ refs, input, quality }: Props) {
     };
     return () => {
       delete w.__aaTp;
+      delete w.__aaWarp;
+      delete w.__aaAimWorld;
+      delete w.__aaAimHeart;
       delete w.__aaAimAt;
     };
   }, [refs, camera]);
 
   return (
     <group>
+      {/* depth fog: the bloodstream has distance (spec: lighting changes + depth) */}
+      <fogExp2 attach="fog" args={["#160409", quality === "LOW" ? 0.013 : quality === "MEDIUM" ? 0.017 : 0.021]} />
       <VesselTube flowRef={refs.flow} beatRef={refs.beat} segments={quality === "LOW" ? 200 : quality === "MEDIUM" ? 360 : 520} lowTier={quality === "LOW"} />
+      <Junction lowTier={quality === "LOW"} />
       <BloodCells count={particleCount.current} countRef={particleCount} flowRef={refs.flow} beatRef={refs.beat} playerPos={refs.player.pos} lowTier={quality === "LOW"} />
       <Obstructions clotRef={refs.clot} flowRef={refs.flow} beatRef={refs.beat} lowTier={quality === "LOW"} />
       <Player
@@ -407,9 +516,28 @@ export function HeartMission({ refs, input, quality }: Props) {
       <hemisphereLight args={["#12182a", "#1a0509", 0.35]} />
       <pointLight position={[0, 1.5, 8]} intensity={2.4 + refs.beat.current * 3.2} distance={34} color="#c21e3a" />
       <pointLight position={[0, 0, -70]} intensity={0.9} distance={40} color="#2DD9E8" />
+      {quality !== "LOW" && (
+        <pointLight
+          position={(() => {
+            const p = new THREE.Vector3();
+            vesselCurve.getPointAt(0.55, p);
+            return p.toArray();
+          })()}
+          intensity={1.4}
+          distance={18}
+          color="#ffb020"
+        />
+      )}
+      {/* the hero heart: visible at the end of the artery — the thing you are saving */}
+      <Suspense fallback={null}>
+        <HeroHeart beatRef={refs.beat} quality={quality} />
+      </Suspense>
       {/* objective beacons: diegetic navigation (spec §9/§33) — amber stands out in the red world */}
-      <TargetBeacon t={CLOT_T} color="#ffb020" visibleUntilObjective={4} flowRef={refs.flow} />
-      <TargetBeacon t={STABILIZE_T} color="#2DD9E8" visibleWhenObjective={5} flowRef={refs.flow} />
+      <TargetBeacon t={NAVIGATE_T} color="#2DD9E8" visibleWhenObjective={2} flowRef={refs.flow} />
+      <TargetBeacon t={JUNCTION_END_T} color="#2DD9E8" visibleWhenObjective={3} flowRef={refs.flow} />
+      <TargetBeacon t={CLOT_T} color="#ffb020" visibleWhenObjective={5} flowRef={refs.flow} />
+      <TargetBeacon t={CLOT_T} color="#ffb020" visibleWhenObjective={6} flowRef={refs.flow} />
+      <TargetBeacon t={STABILIZE_T} color="#2DD9E8" visibleWhenObjective={9} flowRef={refs.flow} />
     </group>
   );
 }
@@ -466,6 +594,72 @@ function TargetBeacon({
         <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} />
       </mesh>
       <pointLight color={color} intensity={2.2} distance={9} />
+    </group>
+  );
+}
+
+/**
+ * HERO HEART (ASSET: public/models/heart_hero.glb — BodyParts3D, CC BY 4.0,
+ * see docs/ASSETS.md): the real anatomical heart visible at the end of the
+ * artery. The vessel opens toward it; it beats with the global pulse. This is
+ * the "I am inside a body" payoff — the player sees the organ they are saving.
+ */
+function HeroHeart({
+  beatRef,
+  quality,
+}: {
+  beatRef: React.MutableRefObject<number>;
+  quality: "LOW" | "MEDIUM" | "HIGH";
+}) {
+  const gltf = useLoader(GLTFLoader, "/models/heart_hero.glb");
+  const scene = useMemo(() => {
+    const s = gltf.scene.clone(true);
+    // palette-controlled luminous myocardium — reads as living tissue through fog
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color("#8e2536"),
+      emissive: new THREE.Color("#6b1220"),
+      emissiveIntensity: 0.9,
+      roughness: 0.62,
+      metalness: 0.04,
+    });
+    s.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.frustumCulled = true;
+        mesh.material = mat;
+      }
+    });
+    return s;
+  }, [gltf]);
+  const group = useRef<THREE.Group>(null);
+
+  const layout = useMemo(() => {
+    const end = new THREE.Vector3();
+    const tan = new THREE.Vector3();
+    vesselCurve.getPointAt(1, end);
+    vesselCurve.getTangentAt(1, tan);
+    // close enough to read the anatomy, far enough to see the whole organ
+    const pos = end.clone().addScaledVector(tan, 11).add(new THREE.Vector3(0, 0.5, 0));
+    const quat = new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().lookAt(new THREE.Vector3(0, 0, 0), tan.clone().multiplyScalar(-1), new THREE.Vector3(0, 1, 0))
+    );
+    return { pos, quat };
+  }, []);
+
+  useFrame((state) => {
+    const g = group.current;
+    if (!g) return;
+    const beat = beatRef.current;
+    // systole: the whole organ swells with each beat
+    const s = 80 * (1 + beat * 0.05);
+    g.scale.setScalar(s);
+    g.rotation.y = Math.sin(state.clock.elapsedTime * 0.22) * 0.16;
+  });
+
+  return (
+    <group ref={group} position={layout.pos} quaternion={layout.quat}>
+      <primitive object={scene} />
+      <pointLight intensity={quality === "LOW" ? 1.0 : 1.5} distance={30} color="#c21e3a" position={[0, 0, 6]} />
     </group>
   );
 }

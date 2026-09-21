@@ -92,9 +92,15 @@ export default function Home() {
       const info = ANATOMY[detail.id];
       if (!info) return;
       const g = useGame.getState();
+      // the blockage scan is a clinical READOUT, not just a discovery card
+      const analyzing = detail.id === "thrombus" || detail.id === "plaque";
       const d: Discovery = {
         id: info.id,
-        title: info.title,
+        title: analyzing
+          ? detail.id === "thrombus"
+            ? "ANALYSIS — 92% OCCLUSION (LAD)"
+            : "ANALYSIS — PLAQUE RUPTURE SITE (LAD)"
+          : info.title,
         subtitle: info.subtitle,
         body: info.body,
         missionTip: info.missionTip,
@@ -103,9 +109,12 @@ export default function Home() {
         at: Date.now(),
       };
       g.openScan(d);
-      // scanning the obstruction completes objective 03 (index 2)
-      if ((detail.id === "thrombus" || detail.id === "plaque") && !g.objectives[2].done) {
-        g.completeObjective(2);
+      // stage 05 CALIBRATE THE SCANNER — any successful scan teaches the tool
+      if (!g.objectives[4].done) g.completeObjective(4);
+      // stage 07 ANALYZE THE BLOCKAGE — scanning the obstruction returns the readout
+      if (detail.id === "thrombus" || detail.id === "plaque") {
+        if (!g.objectives[5].done) g.completeObjective(5);
+        if (!g.objectives[6].done) g.completeObjective(6);
       }
     };
     window.addEventListener("aa-scan", onScan);

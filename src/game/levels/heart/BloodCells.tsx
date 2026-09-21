@@ -25,11 +25,14 @@ interface CellSeed {
   scale: number;
   tumble: THREE.Euler;
   isPlatelet: boolean;
+  isWBC: boolean;
   wobblePhase: number;
   spinSpeed: number; // constant per-instance roll rate (L27 wind law)
 }
 
 function turbulenceAt(t: number, cleared: number): number {
+  // branch junctions are natural mixing points — mild swirl (living-stream law)
+  if (t >= 0.29 && t <= 0.41) return Math.max(0.28, 0);
   for (const z of HEART_VESSEL_ZONES) {
     if (t >= z.t0 && t <= z.t1) {
       const local = (t - z.t0) / (z.t1 - z.t0);
@@ -57,6 +60,7 @@ export function BloodCells({
 }) {
   const rbcRef = useRef<THREE.InstancedMesh>(null);
   const pltRef = useRef<THREE.InstancedMesh>(null);
+  const wbcRef = useRef<THREE.InstancedMesh>(null);
 
   const seeds = useMemo<CellSeed[]>(() => {
     const arr: CellSeed[] = [];
@@ -66,21 +70,24 @@ export function BloodCells({
     })();
     for (let i = 0; i < countRef.current; i++) {
       const isPlatelet = rng() < 0.08;
+      const isWBC = !isPlatelet && !lowTier && rng() < 0.022;
       // keep the spawn corridor (t < 0.06) clear so the first view is open vessel
       arr.push({
         t: 0.06 + rng() * 0.94,
         angle: rng() * Math.PI * 2,
         dist: 0.15 + rng() * 0.68,
         speed: 0.8 + rng() * 0.5,
-        scale: 0.8 + rng() * 0.5,
+        // true size variety (spec: cells differ in SIZE): RBC ≈ 7.5µm, WBC ≈ 13µm
+        scale: isWBC ? 1.55 + rng() * 0.35 : 0.55 + rng() * 0.95,
         tumble: new THREE.Euler(rng() * 6.3, rng() * 6.3, rng() * 6.3),
         isPlatelet,
+        isWBC,
         wobblePhase: rng() * Math.PI * 2,
         spinSpeed: (rng() < 0.5 ? -1 : 1) * (0.6 + rng() * 1.8),
       });
     }
     return arr;
-  }, [countRef]);
+  }, [countRef, lowTier]);
 
   const rbcGeo = useMemo(() => {
     // TRUE biconcave disc (L25): thick rim, dimpled center — the RBC silhouette
@@ -100,12 +107,17 @@ export function BloodCells({
 
   // one-time per-instance color variance (deep-red spread, zero per-frame cost)
   const colorized = useRef(false);
-  const paintInstances = (mesh: THREE.InstancedMesh | null, n: number) => {
+  const paintInstances = (mesh: THREE.InstancedMesh | null, n: number, kind: "rbc" | "wbc") => {
     if (!mesh || colorized.current) return;
     const c = new THREE.Color();
     for (let i = 0; i < n; i++) {
-      const v = 0.82 + ((i * 2654435761) % 1000) / 1000 * 0.42; // deterministic hash
-      c.setRGB(Math.min(1, 0.63 * v + 0.08), 0.055 * v, 0.07 * v);
+      if (kind === "wbc") {
+        const v = 0.85 + ((i * 40503) % 1000) / 1000 * 0.2;
+        c.setRGB(0.78 * v, 0.74 * v, 0.68 * v);
+      } else {
+        const v = 0.82 + ((i * 2654435761) % 1000) / 1000 * 0.42; // deterministic hash
+        c.setRGB(Math.min(1, 0.63 * v + 0.08), 0.055 * v, 0.07 * v);
+      }
       mesh.setColorAt(i, c);
     }
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -119,9 +131,11 @@ export function BloodCells({
 
     let rbcIdx = 0;
     let pltIdx = 0;
+    let wbcIdx = 0;
     // governor count cap (L6): instance buffer may exceed the live count
     const live = Math.min(seeds.length, countRef.current);
-    paintInstances(rbcRef.current, live);
+    paintInstances(rbcRef.current, live, "rbc");
+    paintInstances(wbcRef.current, live, "wbc");
     for (let i = 0; i < live; i++) {
       const s = seeds[i];
       // flow velocity: slowed + recirculating near obstructions until cleared
@@ -159,7 +173,9 @@ export function BloodCells({
 
       _scale.setScalar(s.scale * (s.isPlatelet ? 0.38 : 1));
       _mtx.compose(_pos, _q, _scale);
-      if (s.isPlatelet) {
+      if (s.isWBC) {
+        wbcRef.current?.setMatrixAt(wbcIdx++, _mtx);
+      } else if (s.isPlatelet) {
         pltRef.current?.setMatrixAt(pltIdx++, _mtx);
       } else {
         rbcRef.current?.setMatrixAt(rbcIdx++, _mtx);
@@ -172,6 +188,10 @@ export function BloodCells({
     if (pltRef.current) {
       pltRef.current.count = pltIdx;
       pltRef.current.instanceMatrix.needsUpdate = true;
+    }
+    if (wbcRef.current) {
+      wbcRef.current.count = wbcIdx;
+      wbcRef.current.instanceMatrix.needsUpdate = true;
     }
   });
 
@@ -205,6 +225,12 @@ export function BloodCells({
           />
         )}
       </instancedMesh>
+      {/* white blood cells — larger, pale, slower (size-difference lesson, spec §25) */}
+      {!lowTier && (
+        <instancedMesh ref={wbcRef} args={[rbcGeo, undefined, countRef.current]} frustumCulled={false}>
+          <meshStandardMaterial color="#c9c2b6" emissive="#2a2622" emissiveIntensity={0.3} roughness={0.5} metalness={0} />
+        </instancedMesh>
+      )}
     </group>
   );
 }

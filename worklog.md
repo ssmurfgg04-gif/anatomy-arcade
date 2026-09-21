@@ -175,3 +175,46 @@ Stage Summary:
 - P5 landing live + research law encoded; mobile perf core (governor) in.
 - Key numbers: chase rate 8+0.9*speed+2*err; FOV 78+0.4*speed+10 boost; i-frames 0.45s; governor budget 1.18x/0.72x, scale steps -0.06/0.35s +0.03/0.7s, demote 2.2s/4s cd, promote 8s/10s cd.
 - Next: VLM critique round 1 (P9 protocol w/ red-sands QA gates), P6 scan journal/polish, P7 missions, Sketchfab token still owed.
+
+---
+Task ID: 2
+Agent: asset-hunter subagent
+Task: No-token 3D asset acquisition (P4b) — obtain anatomical meshes from no-auth open sources, convert to GLB, place in public/models/, document licenses in docs/ASSETS.md.
+
+Work Log:
+- Read worklog.md + CONTEXT.md + docs/ASSETS.md (used its existing 8-column table template).
+- Installed conversion toolchain into sandbox venv: trimesh 4.11.1, pygltflib, fast-simplification (note: `pip install --user` lands in py3.13 while default python3 is /home/z/.venv py3.12 — must use `python3 -m pip`).
+- Probed sources: NIH 3D (3d.nih.gov) API endpoints 404 (Next.js SPA, no public API found) → skipped after 2 attempts; Smithsonian needs api_key → skipped; Wikimedia Commons search worked once (found File:3D model of a human heart.stl + Vh-m/Vh-f-heart.stl = BP3D derivatives) then hard 429/403 rate-limit on shared IP → downloads failed, documented; Z-Anatomy releases 404 (no assets, .blend-only anyway) → skipped; GitHub unauthenticated repo search found the jackpot.
+- JACKPOT: ashemag/human-atlas (MIT code, CC BY 4.0 data) — browser-ready BodyParts3D 4.0 adult male: 2,234 structures packed into 15 binary chunks + atlas.json manifest (byte offsets per part). Its public/ATTRIBUTION.md confirms BP3D 4.0 is now officially CC BY 4.0 (license page updated 2025-02-27, supersedes legacy CC BY-SA 2.1 JP). Shallow-cloned (155 MB) to /home/z/tmp-assetwork/atlas (outside repo).
+- Wrote scripts/asset_check/extract_atlas_heart.py: decodes manifest, streams float32 positions + uint32 indices per structure from body-N.bin, merges, centers, simplifies, exports GLB.
+- Produced 3 GLBs in public/models/: heart_hero.glb (FMA7088 heart concept, 86 parts incl. full coronary tree + aortic root/pulmonary trunk/SVC stubs; 57,830 tris, 1.04 MB, ~12 cm real scale); coronary_artery.glb (FMA49893, 56 parts; 18,164 tris, 329 KB); body_silhouette.glb (all 2,234 parts, 2,288,268 → 30,000 tris via fast-simplification, 569 KB, 1.73 m figure).
+- Verified all 3: trimesh re-parse (tris/extents sane), three.js GLTFLoader render via temp local page + Playwright/SwiftShader screenshots → pixel-verified non-empty, screenshots kept in scripts/asset_check/shot_*.png. Temp _view.html removed from public/models/.
+- Skipped RBC: no open-licensed 3D RBC found in budget; game already has procedural biconcave lathe RBCs (P5.5).
+- Appended 3 ASSET rows + HERO verdict + Failed-sources section to docs/ASSETS.md. No git commit (per task). Nothing in src/, package.json, bun.lock touched.
+
+Stage Summary:
+- HERO HEART: YES — public/models/heart_hero.glb, 57,830 tris, CC BY 4.0 (BodyParts3D 4.0 © The Database Center for Life Science). Anatomical 4-chamber heart w/ coronary tree; centered, Y-up, meters; integration-ready (scale ≈1:1 real-world; ~12 cm, consider scene scale or wrap in group).
+- coronary_artery.glb (18k tris) + body_silhouette.glb (30k tris) available for mission dressing / BioDex body-map (use translucent for silhouette).
+- Credits line required: "Anatomical meshes: BodyParts3D, © The Database Center for Life Science, CC BY 4.0 (via ashemag/human-atlas adaptations)."
+- Sketchfab P4 download queue (docs/ASSET-RESEARCH.md) now OPTIONAL — hero heart, coronary tree and body are covered no-token. Still valid if user later supplies a token for the higher-detail Sketchfab hero.
+- Failed sources logged in ASSETS.md so nobody retries blindly: NIH 3D (404 API), Wikimedia (IP rate-limited; candidates known), Smithsonian (key), Z-Anatomy (no usable files), unlicensed GitHub heart.glb repos (rejected).
+
+---
+Task ID: 3
+Agent: main
+Task: P4c + P5.7 — no-token asset acquisition follow-up (integrate hero heart) + 10-stage heart mission rework per spec §25-40 (living bloodstream, objective tech, mobile-safe).
+
+Work Log:
+- Dispatched asset-hunter subagent (Task 2): returned heart_hero.glb (57,830 tris CC BY 4.0 BodyParts3D via ashemag/human-atlas), coronary_artery.glb, body_silhouette.glb in public/models/ + ASSET records in docs/ASSETS.md. Sketchfab officially dropped as a source (D4).
+- Rewrote heart mission to the 10-stage arc: state.ts 10 objectives (brief/enter/navigate/identify/scan/locate/analyze/clear/restore/stabilize) + completeObjectiveSilent + failProgress->idx7; vessel.ts junction data (spur curve, LCX taper); VesselTube generalized (buildTubeGeometry + exported shaders); new Junction.tsx (spur tube, dead-end cap, LAD/LCX holo signage, flow arrows, junction light); HeartMission.tsx stage machine + LCX soft wall (pushback + rate-limited guidance) + HeroHeart (GLTF, beats with pulse, palette-controlled luminous material) + fogExp2 (tier-tuned) + zone lights; BloodCells WBCs (MEDIUM+) + RBC size variety 0.55-1.5 + junction turbulence.
+- HUD: OBJECTIVE x/10 counters, BlockBar `██████░░░░ 60%`, per-stage desktop/mobile action prompts ([Q]/[E] vs TAP SCAN/HOLD TREAT), LCX wrong-branch warning banner, NEW BIODex ENTRY · +150 BIO XP toast.
+- page.tsx: scan handler completes calibrate (any scan) + analyze (thrombus/plaque → "ANALYSIS — 92% OCCLUSION (LAD)" readout title); Screens.tsx: brief completes silently on BEGIN + THE BIOLOGY lesson card (ISCHEMIA → REPERFUSION) in Results; Overlays credits += BodyParts3D.
+- E2E: new scripts/aa_p6_ten_stages.py → 20/20 PASS (all 10 stages, occlusion readout, biology card, mobile ticker x/10 + touch buttons via touch context). Diagnostics scripts: aa_diag_patient.py (found vitals bug), aa_diag_tp.py (verified state machine), aa_reshoot.py.
+- BUGS FOUND+FIXED: (1) VITALS LAW — drift line used stale frame-start snapshot, overwrote restore ramp's patientStatus every frame (patient stuck at 62% through reperfusion); fixed with fresh getState() read (D6). (2) Junction signs faced away (lookAt target sign) — invisible; flipped. (3) Heart blew out white (source material + light) → full material override to crimson + emissive; repositioned to end+tan*11 scale 80. (4) EducationPanel ignored analysis title override → uses activeScan.title.
+- Noted sandbox FS quirk: sed/rg/python showed phantom corrupted bytes ([h deleted) in GameCanvas.tsx while Read/bun/tsc saw the true file — stale page-cache after restore; NO real corruption; do not "fix" phantom diffs, verify with the Read tool first.
+- Visual QA rounds (BUILD→RUN→PLAY→OBSERVE→CRITIQUE→FIX ×3): fog depth reads, WBC/RBC size contrast visible, analysis panel matches spec, mobile ticker shows block bars, heart payoff lands (coronary tree glows through fog).
+
+Stage Summary:
+- 10-stage heart mission complete and E2E-green (20/20); hero real-anatomy heart integrated with clean CC BY 4.0 attribution; living-bloodstream upgrades tier-gated for mobile.
+- Artifacts: public/models/{heart_hero,coronary_artery,body_silhouette}.glb, Junction.tsx, probe scripts, updated ASSETS.md/CONTEXT.md.
+- Next: VLM critique round 1 on this build, P6 journal polish, P7 missions reuse the 10-stage template.
