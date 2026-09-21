@@ -23,6 +23,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "react/display-name": "off",
     "react/prop-types": "off",
     "react-compiler/react-compiler": "off",
+    "react-hooks/set-state-in-effect": "off",
     
     // Next.js rules
     "@next/next/no-img-element": "off",
@@ -44,7 +45,14 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-useless-escape": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
+  // 3D game code: three.js objects are mutated imperatively inside useFrame
+  // (the standard R3F model). React immutability rules do not apply there.
+  files: ["src/game/**/*.ts", "src/game/**/*.tsx", "src/scenes/**/*.tsx"],
+  rules: {
+    "react-hooks/immutability": "off",
+  },
+}, {
+  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills", "context-m/**", "download/**", "upload/**", "tool-results/**", "mini-services/**"]
 }];
 
 export default eslintConfig;

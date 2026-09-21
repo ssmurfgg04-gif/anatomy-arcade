@@ -26,10 +26,10 @@
 | Phase | Scope | Status |
 |-------|-------|--------|
 | P0 | Repo + context system + taste skill install | ✅ DONE |
-| P1 | Scaffold Next.js + R3F + game folder structure | IN PROGRESS |
-| P2 | Core game engine: state machine, controls (WASD/mouse + touch joystick), camera modes, player feel | PENDING |
-| P3 | HEART MISSION vertical slice: vessel world, blood flow, plaque/clot, intervention, flow-restored payoff | PENDING |
-| P4 | Assets: research + download (Sketchfab CC / procedural / Meshy-selective), optimize (Draco/meshopt), ASSETS.md | PENDING |
+| P1 | Scaffold Next.js + R3F + game folder structure | ✅ DONE |
+| P2 | Core game engine: state machine, controls (WASD/mouse + touch joystick), camera modes, player feel | ✅ DONE |
+| P3 | HEART MISSION vertical slice: vessel world, blood flow, plaque/clot, intervention, flow-restored payoff | ✅ PLAYABLE E2E (browser-verified) |
+| P4 | Assets: research DONE (docs/ASSET-RESEARCH.md, CC-BY top picks); downloads blocked on Sketchfab API token | PENDING TOKEN |
 | P5 | Main menu + mission select + full-body explorer | PENDING |
 | P6 | Educational layer + Qwen scan integration (server route, validated, static fallback) | PENDING |
 | P7 | Viral Invasion + Brain Mission | PENDING |
@@ -56,6 +56,15 @@ Never sacrifice the working heart mission for another half-finished feature.
 
 ## Next actions (pick up here)
 
-1. Finish P1 scaffold (game folder structure per spec §17).
-2. P2 core engine: Zustand game state machine (BOOT→LOADING→MAIN_MENU→MISSION_SELECT→MISSION_INTRO→PLAYING→SCANNING→INTERACTION→OBJECTIVE_COMPLETE→EDUCATION_POPUP→MISSION_COMPLETE→RESULTS).
-3. Heart mission is the vertical slice — pour quality there first.
+1. VLM critique round 1 (structure): screenshots desktop+mobile menu/gameplay/panel, fix findings.
+2. Visual polish: menu body backdrop brightness, RBC biconcave disc shape, vessel wall stripe banding up close, plaque blowout up close, platelet shading.
+3. P4 asset downloads: needs Sketchfab API token from user (queue in docs/ASSET-RESEARCH.md DOWNLOAD QUEUE).
+4. P6: verify Qwen route latency + caching; scan history/journal UI.
+5. P7: Viral + Brain missions reuse the engine (vessel -> alveoli cavity, vessel -> neural web).
+6. Mobile hardening pass (touch controls verified logically, needs real device/VLM round 4).
+
+## Verified working (browser, 2026-09-21)
+
+- Golden path E2E: menu -> mission select -> cinematic intro -> flight (WASD hold, collision damage) -> locate -> scan (Qwen AI ENHANCED panel) -> clot treatment (hold E, 4 segments) -> flow restore 0->1 -> stabilize -> MISSION COMPLETE -> S-rank results (5839 pts, patient 100%).
+- ObjectiveBanner auto-resume, HUD telemetry (patient/rig/time), discovery toast, pause menu, quality AUTO resolves LOW on SwiftShader (sandbox-safe) with LOW-tier fast shader path.
+- Qwen /api/explain returns AI-enhanced validated JSON; static fallback guaranteed.

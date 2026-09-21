@@ -46,3 +46,18 @@ Stage Summary:
 - Hero heart: Realistic Human Heart by neshallads (CC-BY, 22.5k tris). Cells all <5k tris. NC list recorded so nobody grabs E-learning UMCG / HannahNewey models by accident.
 - Vessels/flow/plaque/neural-net/alveoli clusters to be built procedurally in Three.js (documented with techniques).
 - Next: P4 download phase needs $SKETCHFAB_API_TOKEN for /v3/models/{uid}/download (GLB), then Draco/meshopt + ASSETS.md attribution rows.
+
+---
+Task ID: P1-P3
+Agent: main
+Task: Build playable heart-mission vertical slice (scaffold, engine, level, UI, Qwen).
+
+Work Log:
+- Installed three/@react-three/fiber/@react-three/drei/maath; merged scaffold into anatomy-arcade repo history.
+- Built src/game (core state machine, quality tiers, controls incl. touch, vessel spline system, heart level: vessel tube shader + instanced blood cells + plaque/clot + player rig), src/ui (HUD, menus, education panel), src/scenes (GameCanvas, MenuScene), src/audio (procedural WebAudio SFX), /api/explain (Qwen + validated fallback).
+- Browser-verified golden path end-to-end via agent-browser incl. Qwen AI-enhanced scan panel; fixed: Euler passed to getWorldDirection (objective 01 never completing), phase stomp of EDUCATION_POPUP, scan ray far 7->12, SwiftShader LOW-tier fast path (software GL detect), wall-clock intro.
+
+Stage Summary:
+- Heart mission fully playable E2E; S-rank results screen live; Qwen integration verified with AI ENHANCED badge.
+- Known polish debt: menu backdrop dark, RBC sphere-ish, vessel banding close-up, plaque blowout close-up (VLM round 1 targets).
+- Sketchfab downloads blocked on API token (asset queue ready in docs/ASSET-RESEARCH.md).

@@ -120,3 +120,44 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ===== ANATOMY ARCADE ===== */
+html, body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  --aa-bg: #04070c;
+  --aa-cyan: #2dd9e8;
+  --aa-crimson: #c21e3a;
+}
+
+body {
+  background: var(--aa-bg);
+  font-feature-settings: "tnum" 1;
+}
+
+@keyframes scanline {
+  0% { transform: translateX(-100%); opacity: 0; }
+  15% { opacity: 1; }
+  50% { transform: translateX(100%); opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
+/* range input styling for pause menu */
+input[type="range"] {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  appearance: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--aa-cyan);
+  box-shadow: 0 0 10px rgba(45, 217, 232, 0.7);
+  cursor: pointer;
+}
