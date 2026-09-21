@@ -73,7 +73,33 @@ export function HUD({ onPause }: { onPause: () => void }) {
   const dismissToast = useGame((s) => s.dismissToast);
   const beatRef = useRef<HTMLDivElement>(null);
   const damageRef = useRef<HTMLDivElement>(null);
+  const reticleRef = useRef<HTMLDivElement>(null);
   const lastHealth = useRef(100);
+
+  // reticle treatment feedback: amber when aimed at clot, pulse while dissolving
+  useEffect(() => {
+    const onAim = (e: Event) => {
+      const aiming = !!(e as CustomEvent).detail?.aiming;
+      const el = reticleRef.current;
+      if (!el) return;
+      el.style.setProperty("--reticle-c", aiming ? "251,191,36" : "45,217,232");
+      el.dataset.aiming = aiming ? "1" : "0";
+    };
+    const onProgress = () => {
+      const el = reticleRef.current;
+      if (!el) return;
+      el.style.transform = "scale(1.35)";
+      setTimeout(() => {
+        if (el) el.style.transform = "scale(1)";
+      }, 90);
+    };
+    window.addEventListener("aa-aim-clot", onAim);
+    window.addEventListener("aa-dissolve-progress", onProgress);
+    return () => {
+      window.removeEventListener("aa-aim-clot", onAim);
+      window.removeEventListener("aa-dissolve-progress", onProgress);
+    };
+  }, []);
 
   // heartbeat vignette pulse (subtle, tied to BPM via CSS animation)
   useEffect(() => {
@@ -121,6 +147,9 @@ export function HUD({ onPause }: { onPause: () => void }) {
     else if (cur.id === "stabilize") actionHint = "HOLD POSITION INSIDE THE CYAN RING";
   }
 
+  // micro-facts are for traversal moments only — never mid-combat
+  const combat = cur?.id === "clear" || cur?.id === "restore" || cur?.id === "stabilize";
+
   return (
     <div className="pointer-events-none fixed inset-0 z-30 font-sans text-white">
       {/* vignettes */}
@@ -132,11 +161,17 @@ export function HUD({ onPause }: { onPause: () => void }) {
         <div className="flex flex-col gap-1">
           <div className="font-mono text-[10px] tracking-[0.3em] text-cyan-200/80">HEART RESPONSE</div>
           <div className="flex items-center gap-2.5 font-mono text-xs text-white/70 sm:gap-3">
-            <span className="tabular-nums">{fmtTime(missionTime)}</span>
+            <span className="tabular-nums" title="Mission time">T+{fmtTime(missionTime)}</span>
             <span className="text-cyan-300/60">|</span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(194,30,58,0.9)]" />
-              PATIENT {Math.round(patientStatus)}%
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full shadow-[0_0_6px_rgba(194,30,58,0.9)] ${
+                  patientStatus < 45 ? "animate-pulse bg-rose-500" : patientStatus < 70 ? "bg-amber-400" : "bg-rose-400"
+                }`}
+              />
+              <span className={patientStatus < 45 ? "text-rose-300" : patientStatus < 70 ? "text-amber-200" : "text-white/70"}>
+                PATIENT {Math.round(patientStatus)}%
+              </span>
             </span>
             <span className="hidden text-cyan-300/60 sm:inline">|</span>
             <span className="hidden items-center gap-1.5 sm:flex">
@@ -173,15 +208,22 @@ export function HUD({ onPause }: { onPause: () => void }) {
         </div>
       </div>
 
-      {/* center reticle */}
+      {/* center reticle — cyan normally, amber when aimed at the clot */}
       {phase === "PLAYING" && (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div className="relative h-8 w-8">
-            <div className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-300/90 shadow-[0_0_8px_rgba(45,217,232,0.9)]" />
-            <div className="absolute left-1/2 top-0 h-2 w-px -translate-x-1/2 bg-cyan-200/50" />
-            <div className="absolute bottom-0 left-1/2 h-2 w-px -translate-x-1/2 bg-cyan-200/50" />
-            <div className="absolute left-0 top-1/2 h-px w-2 -translate-y-1/2 bg-cyan-200/50" />
-            <div className="absolute right-0 top-1/2 h-px w-2 -translate-y-1/2 bg-cyan-200/50" />
+          <div
+            ref={reticleRef}
+            className="relative h-8 w-8 transition-transform duration-100"
+            style={{ transform: "scale(1)" }}
+          >
+            <div
+              className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_8px_rgba(45,217,232,0.9)]"
+              style={{ background: "rgb(var(--reticle-c, 45,217,232))" }}
+            />
+            <div className="absolute left-1/2 top-0 h-2 w-px -translate-x-1/2" style={{ background: "rgba(var(--reticle-c, 45,217,232), 0.55)" }} />
+            <div className="absolute bottom-0 left-1/2 h-2 w-px -translate-x-1/2" style={{ background: "rgba(var(--reticle-c, 45,217,232), 0.55)" }} />
+            <div className="absolute left-0 top-1/2 h-px w-2 -translate-y-1/2" style={{ background: "rgba(var(--reticle-c, 45,217,232), 0.55)" }} />
+            <div className="absolute right-0 top-1/2 h-px w-2 -translate-y-1/2" style={{ background: "rgba(var(--reticle-c, 45,217,232), 0.55)" }} />
           </div>
         </div>
       )}
@@ -206,8 +248,18 @@ export function HUD({ onPause }: { onPause: () => void }) {
         <div className="mt-4 space-y-1.5">
           {objectives.map((o, i) => (
             <div key={o.id} className="flex items-center gap-2 font-mono text-[9px] tracking-widest">
-              <span className={`inline-block h-1 w-1 rounded-full ${o.done ? "bg-cyan-300" : i === currentObjective ? "bg-amber-300 animate-pulse" : "bg-white/20"}`} />
-              <span className={o.done ? "text-white/35 line-through" : i === currentObjective ? "text-white/85" : "text-white/40"}>
+              <span
+                className={`inline-block ${
+                  o.done
+                    ? "text-[9px] leading-none text-cyan-300"
+                    : i === currentObjective
+                      ? "h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.9)]"
+                      : "h-1 w-1 rounded-full bg-white/20"
+                }`}
+              >
+                {o.done ? "\u2713" : ""}
+              </span>
+              <span className={o.done ? "text-white/35 line-through" : i === currentObjective ? "text-white/95" : "text-white/40"}>
                 {String(i + 1).padStart(2, "0")} {o.label}
               </span>
             </div>
@@ -244,7 +296,7 @@ export function HUD({ onPause }: { onPause: () => void }) {
         </div>
       )}
 
-      <MicroFact quiet={!!toast || !!actionHint} />
+      <MicroFact quiet={!!toast || !!actionHint || combat} />
     </div>
   );
 }

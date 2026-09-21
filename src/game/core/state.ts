@@ -66,6 +66,7 @@ interface GameState {
   uiOverlay: UiOverlay;
   tutorialDone: boolean; // persisted to localStorage by the shell
   failReason: FailReason;
+  failProgress: number; // clot-dissolve progress retained at fail time (0..1, -1 n/a)
 
   // vitals / progress
   patientStatus: number; // 0..100
@@ -128,7 +129,7 @@ const MISSION_OBJECTIVES: Record<MissionId, { id: string; label: string }[]> = {
     { id: "enter", label: "ENTER VASCULAR SYSTEM" },
     { id: "locate", label: "LOCATE FLOW ANOMALY" },
     { id: "scan", label: "SCAN THE BLOCKAGE" },
-    { id: "clear", label: "BREAK DOWN THE CLOT" },
+    { id: "clear", label: "DISSOLVE THE CLOT" },
     { id: "restore", label: "RESTORE BLOOD FLOW" },
     { id: "stabilize", label: "STABILIZE THE HEART" },
   ],
@@ -173,6 +174,7 @@ export const useGame = create<GameState>((set, get) => ({
   uiOverlay: null,
   tutorialDone: false,
   failReason: null,
+  failProgress: -1,
 
   settings: {
     quality: "AUTO",
@@ -200,6 +202,7 @@ export const useGame = create<GameState>((set, get) => ({
       activeScan: null,
       discoveryToast: null,
       failReason: null,
+      failProgress: -1,
       phase: "MISSION_BRIEF",
       prevPhase: "MISSION_SELECT",
       cameraMode: "CINEMATIC",
@@ -289,6 +292,7 @@ export const useGame = create<GameState>((set, get) => ({
       activeScan: null,
       discoveryToast: null,
       failReason: null,
+      failProgress: -1,
     });
   },
 
@@ -297,7 +301,17 @@ export const useGame = create<GameState>((set, get) => ({
 
   failMission: (reason) =>
     set((s) =>
-      s.phase === "MISSION_FAILED" ? {} : { phase: "MISSION_FAILED", failReason: reason }
+      s.phase === "MISSION_FAILED"
+        ? {}
+        : {
+            phase: "MISSION_FAILED",
+            failReason: reason,
+            // how close the player got: keeps failure instructive, not punishing
+            failProgress:
+              s.objectives[3]?.progress != null && s.objectives[3].progress > 0
+                ? s.objectives[3].progress
+                : -1,
+          }
     ),
 }));
 

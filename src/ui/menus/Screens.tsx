@@ -142,7 +142,7 @@ export function MissionBriefing() {
           <span className="absolute inset-y-0 left-0 w-1 bg-cyan-300 shadow-[0_0_12px_rgba(45,217,232,1)] transition-all duration-300 group-hover:w-1.5" />
         </button>
         <div className="mt-2 text-center font-mono text-[9px] tracking-[0.3em] text-white/35">
-          Follow the red beacon. The HUD will guide you step by step.
+          Follow the amber beacon. The HUD will guide you step by step.
         </div>
       </div>
     </div>
@@ -229,6 +229,7 @@ export function MissionComplete() {
 export function MissionFailed() {
   const phase = useGame((s) => s.phase);
   const failReason = useGame((s) => s.failReason);
+  const failProgress = useGame((s) => s.failProgress);
   const patientStatus = useGame((s) => s.patientStatus);
   const setPhase = useGame((s) => s.setPhase);
   const resetMission = useGame((s) => s.resetMission);
@@ -243,11 +244,13 @@ export function MissionFailed() {
   const reason = failReason === "RIG"
     ? {
         title: "NANO-RIG DISABLED",
-        body: "Collisions with the vessel wall overwhelmed the rig. Fly gently: wall scrapes damage your machine.",
+        tip: "Ease off near the vessel walls \u2014 wall scrapes damage your rig. Boost only in open stretches.",
+        body: "Too many collisions overwhelmed the rig.",
       }
     : {
         title: "PATIENT LOST",
-        body: "The heart muscle did not receive enough oxygen in time. Speed matters: follow the red beacon directly to the blockage.",
+        tip: "Keep the amber beacon in view and boost down open stretches \u2014 speed matters.",
+        body: "The heart muscle ran out of oxygen before the blockage was cleared.",
       };
 
   return (
@@ -256,12 +259,24 @@ export function MissionFailed() {
         <div className="font-mono text-[10px] tracking-[0.5em] text-rose-300/90">MISSION FAILED</div>
         <h2 className="mt-1 font-mono text-2xl font-bold tracking-[0.15em] text-white">{reason.title}</h2>
         <p className="mt-4 text-sm leading-relaxed text-white/70">{reason.body}</p>
+        {failProgress > 0.02 && (
+          <div className="mt-4 rounded-sm border border-amber-300/25 bg-amber-400/5 px-4 py-3">
+            <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.25em] text-amber-200/90">
+              <span>CLOT DISSOLVED</span>
+              <span className="tabular-nums">{Math.round(failProgress * 100)}%</span>
+            </div>
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-amber-300" style={{ width: `${failProgress * 100}%` }} />
+            </div>
+            <div className="mt-1.5 text-xs text-white/55">You were {Math.round(failProgress * 100)}% of the way there. One more run.</div>
+          </div>
+        )}
         <div className="mt-4 rounded-sm border border-white/12 bg-black/50 px-4 py-3 font-mono text-[11px] leading-relaxed text-white/60">
-          TIP: boost (SHIFT) down open stretches, ease off near the walls, and keep the red beacon in view.
+          TIP: {reason.tip}
         </div>
         <div className="mt-6 flex gap-3">
           <button
-            className="flex-1 rounded-sm border border-rose-300/60 bg-rose-400/10 py-3 font-mono text-xs tracking-[0.3em] text-rose-100 transition hover:bg-rose-300/25"
+            className="flex-1 rounded-sm border border-rose-300/70 bg-rose-500/25 py-3 font-mono text-xs font-semibold tracking-[0.3em] text-rose-50 transition hover:bg-rose-400/40"
             onClick={() => {
               resetMission();
               setPhase("MISSION_INTRO");
@@ -304,7 +319,12 @@ export function Results() {
         <div className="font-mono text-[10px] tracking-[0.45em] text-cyan-200/80">MISSION COMPLETE</div>
         <div className="mt-1 flex items-baseline gap-4">
           <h2 className="font-mono text-2xl font-bold tracking-[0.15em] text-white">HEART RESPONSE</h2>
-          <span className="font-mono text-4xl font-bold text-cyan-300 drop-shadow-[0_0_18px_rgba(45,217,232,0.6)]">{rank}</span>
+          <span
+            className="inline-block animate-in zoom-in duration-700 font-mono text-4xl font-bold text-cyan-300 drop-shadow-[0_0_18px_rgba(45,217,232,0.6)]"
+            style={{ animationDelay: "400ms", animationFillMode: "backwards" }}
+          >
+            {rank}
+          </span>
         </div>
 
         <div className="mt-4 rounded-sm border border-cyan-300/30 bg-cyan-400/5 px-4 py-3">

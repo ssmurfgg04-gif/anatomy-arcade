@@ -70,6 +70,7 @@ export function HeartMission({ refs, input, quality }: Props) {
   const interactLatch = useRef(false);
   const scanLatch = useRef(false);
   const scanTap = useRef(false); // edge-triggered scan (never missed at low fps)
+  const aimClot = useRef(false); // reticle currently on a clot segment
 
   // scan taps arrive via keyboard events / touch button events, not polling
   useEffectReact(() => {
@@ -159,6 +160,30 @@ export function HeartMission({ refs, input, quality }: Props) {
       refs.targetDist.current = Math.max(0, (STABILIZE_T - refs.player.t) * VESSEL_LEN);
     } else {
       refs.targetDist.current = -1;
+    }
+
+    // ---- aim-at-clot detection: spatial reticle feedback (cause <-> effect) ----
+    const treatPhase = g.objectives[2].done && !g.objectives[3].done;
+    if (treatPhase) {
+      RAY.setFromCamera(new THREE.Vector2(0, 0), camera);
+      let aiming = false;
+      for (const seg of refs.clot.current) {
+        if (seg.hp <= 0 || !seg.ref) continue;
+        if (RAY.intersectObject(seg.ref, false).length > 0) {
+          aiming = true;
+          break;
+        }
+      }
+      if (aiming !== aimClot.current) {
+        aimClot.current = aiming;
+        window.dispatchEvent(new CustomEvent("aa-aim-clot", { detail: { aiming } }));
+      }
+      if (aiming && (input.current.interact || input.current.tInteract)) {
+        window.dispatchEvent(new CustomEvent("aa-dissolve-progress"));
+      }
+    } else if (aimClot.current) {
+      aimClot.current = false;
+      window.dispatchEvent(new CustomEvent("aa-aim-clot", { detail: { aiming: false } }));
     }
 
     // ---- objective 02: LOCATE FLOW ANOMALY (reach the narrowing) ----
@@ -368,8 +393,8 @@ export function HeartMission({ refs, input, quality }: Props) {
       <hemisphereLight args={["#12182a", "#1a0509", 0.35]} />
       <pointLight position={[0, 1.5, 8]} intensity={2.4 + refs.beat.current * 3.2} distance={34} color="#c21e3a" />
       <pointLight position={[0, 0, -70]} intensity={0.9} distance={40} color="#2DD9E8" />
-      {/* objective beacons: diegetic navigation (spec §9/§33) */}
-      <TargetBeacon t={CLOT_T} color="#ff2e4d" visibleUntilObjective={4} flowRef={refs.flow} />
+      {/* objective beacons: diegetic navigation (spec §9/§33) — amber stands out in the red world */}
+      <TargetBeacon t={CLOT_T} color="#ffb020" visibleUntilObjective={4} flowRef={refs.flow} />
       <TargetBeacon t={STABILIZE_T} color="#2DD9E8" visibleWhenObjective={5} flowRef={refs.flow} />
     </group>
   );

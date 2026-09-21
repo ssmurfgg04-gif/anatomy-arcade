@@ -51,9 +51,9 @@ export function HowToPlay() {
   return (
     <OverlayShell title="HOW TO PLAY" onClose={close}>
       <p className="mt-3 text-sm leading-relaxed text-white/70">
-        You pilot a medical nano-robot inside the human body. Follow the glowing beacon to the
-        objective, scan anatomy to learn, and complete the mission before the patient runs out of
-        oxygen.
+        You pilot a medical nano-robot inside the human body. Follow the amber beacon to the
+        blockage, dissolve it, and restore blood flow before the patient runs out of oxygen. Scan
+        glowing markers to learn the anatomy as you fly.
       </p>
       <div className="mt-6 grid gap-5 sm:grid-cols-2">
         <div className="rounded-sm border border-white/12 bg-black/40 p-4">
@@ -61,11 +61,11 @@ export function HowToPlay() {
           <div className="mt-3 space-y-2.5">
             {[
               ["MOVE", "W A S D or Arrow keys"],
-              ["LOOK", "Mouse (click the screen once to capture it)"],
+              ["LOOK", "Drag the mouse — or click once, then move it"],
               ["RISE / DIVE", "Space / C"],
               ["BOOST", "Hold Shift"],
               ["SCAN ANATOMY", "Q while aiming at a glowing marker"],
-              ["TREAT THE CLOT", "Hold E while aiming at it"],
+              ["DISSOLVE THE CLOT", "Hold E while the reticle is on the clot"],
               ["PAUSE", "Esc"],
             ].map(([k, v]) => (
               <div key={k} className="flex items-baseline justify-between gap-3">
@@ -79,12 +79,12 @@ export function HowToPlay() {
           <div className="font-mono text-[9px] tracking-[0.4em] text-cyan-200/80">MOBILE / TOUCH</div>
           <div className="mt-3 space-y-2.5">
             {[
-              ["MOVE", "Left joystick"],
-              ["LOOK", "Drag anywhere on the right"],
-              ["SCAN", "SCAN button"],
-              ["TREAT", "Hold ACT on the clot"],
+              ["MOVE", "Left joystick (bottom left)"],
+              ["LOOK", "Drag anywhere on the right half"],
+              ["SCAN", "SCAN button (right side)"],
+              ["DISSOLVE", "Hold the green ACT button on the clot"],
               ["BOOST", "BST button"],
-              ["PAUSE", "II button (top right)"],
+              ["PAUSE", "Pause bar (top right)"],
             ].map(([k, v]) => (
               <div key={k} className="flex items-baseline justify-between gap-3">
                 <span className="shrink-0 font-mono text-[10px] tracking-[0.25em] text-white/85">{k}</span>
@@ -95,8 +95,8 @@ export function HowToPlay() {
         </div>
       </div>
       <div className="mt-5 rounded-sm border border-cyan-300/25 bg-cyan-400/5 px-4 py-3 text-xs leading-relaxed text-cyan-100/80">
-        The red beacon marks the blockage. The cyan beacon marks the stabilization zone. Your HUD
-        objective line updates as you progress — if you are ever unsure, follow the beacons.
+        The amber beacon marks the blockage. The cyan beacon marks the stabilization zone. When
+        your reticle turns amber, you are aimed at the clot: hold E (or ACT) to dissolve it.
       </div>
     </OverlayShell>
   );

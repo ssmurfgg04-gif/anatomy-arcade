@@ -39,7 +39,7 @@ export function MainMenu() {
               MEDICAL NANOBOT PROGRAM
             </span>
           </div>
-          <h1 className="font-sans text-[13vw] font-bold leading-[0.9] tracking-tight text-white sm:text-7xl lg:text-8xl">
+          <h1 className="font-sans text-[13vw] font-bold leading-[1.02] tracking-tight text-white sm:text-7xl lg:text-8xl">
             ANATOMY
             <br />
             <span className="text-cyan-300 drop-shadow-[0_0_28px_rgba(45,217,232,0.45)]">ARCADE</span>

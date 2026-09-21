@@ -64,7 +64,7 @@ with sync_playwright() as p:
     wait_text(page, "DESKTOP", 5000)
     time.sleep(0.6)
     shot(page, "02_howtoplay")
-    ok = "TREAT THE CLOT" in page.inner_text("body")
+    ok = "DISSOLVE THE CLOT" in page.inner_text("body")
     step("howtoplay_overlay", ok)
     page.get_by_text("CLOSE", exact=True).click()
     time.sleep(0.4)

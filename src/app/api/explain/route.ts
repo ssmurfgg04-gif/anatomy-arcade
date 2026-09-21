@@ -40,6 +40,14 @@ function validate(raw: unknown): ValidatedExplanation | null {
   return out.explanation ? out : null;
 }
 
+function trimCompleteSentence(text: string): string {
+  const t = text.trim();
+  if (/[.!?]"?$/.test(t)) return t;
+  // AI text ended mid-sentence (token cap): cut back to the last sentence end
+  const lastStop = Math.max(t.lastIndexOf(". "), t.lastIndexOf("! "), t.lastIndexOf("? "));
+  return lastStop > 20 ? t.slice(0, lastStop + 1) : t;
+}
+
 export async function POST(req: NextRequest) {
   let body: ExplainBody;
   try {
@@ -94,7 +102,7 @@ Respond with ONLY this JSON object, no markdown fences:
       if (parsed) {
         return NextResponse.json({
           title: parsed.title ?? fallback.title,
-          explanation: parsed.explanation ?? fallback.explanation,
+          explanation: parsed.explanation ? trimCompleteSentence(parsed.explanation) : fallback.explanation,
           funFact: parsed.funFact ?? fallback.funFact,
           missionTip: parsed.missionTip ?? fallback.missionTip,
           keywords: parsed.keywords ?? fallback.keywords,
