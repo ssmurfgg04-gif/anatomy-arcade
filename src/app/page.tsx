@@ -63,10 +63,11 @@ export default function Home() {
     setMuted(paused || phase === "MISSION_SELECT");
   }, [paused, phase]);
 
-  // resume from pause returns to PLAYING
+  // resume from pause returns to PLAYING (GameCanvas listens for aa-resume)
   const resume = useCallback(() => {
     setPaused(false);
     setPhase("PLAYING");
+    window.dispatchEvent(new CustomEvent("aa-resume"));
   }, [setPhase]);
 
   const openPause = useCallback(() => setPaused(true), []);

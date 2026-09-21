@@ -22,6 +22,8 @@ export interface InputState {
   tBoost: boolean;
   tInteract: boolean;
   tScan: boolean;
+  /** pause menu / hard suspension — movement + mission logic freeze (L16) */
+  suspended: boolean;
 }
 
 export function createInputState(): InputState {
@@ -30,6 +32,7 @@ export function createInputState(): InputState {
     lookDX: 0, lookDY: 0,
     tForward: 0, tStrafe: 0, tLookDX: 0, tLookDY: 0,
     tBoost: false, tInteract: false, tScan: false,
+    suspended: false,
   };
 }
 
@@ -42,6 +45,29 @@ const KEYS = {
   ArrowLeft: "strafe-", ArrowRight: "strafe+",
   KeyC: "vertical-", ControlLeft: "vertical-",
 } as const;
+
+/**
+ * Kill every held input (L16 — pause/blur/visibility must never leave stuck
+ * keys or joystick values). Safe to call any time.
+ */
+export function clearHeldInput(input: React.MutableRefObject<InputState>) {
+  input.current.forward = 0;
+  input.current.strafe = 0;
+  input.current.vertical = 0;
+  input.current.boost = false;
+  input.current.interact = false;
+  input.current.scan = false;
+  input.current.tForward = 0;
+  input.current.tStrafe = 0;
+  input.current.tBoost = false;
+  input.current.tInteract = false;
+  input.current.tScan = false;
+  // look deltas are accumulators — zero them too so no stale snap on resume
+  input.current.lookDX = 0;
+  input.current.lookDY = 0;
+  input.current.tLookDX = 0;
+  input.current.tLookDY = 0;
+}
 
 export function useKeyboardInput(input: React.MutableRefObject<InputState>) {
   const keys = useRef<Set<string>>(new Set());
@@ -79,14 +105,24 @@ export function useKeyboardInput(input: React.MutableRefObject<InputState>) {
       keys.current.clear();
       recompute();
     };
+    // tab hidden = OS-level focus loss that does not always fire blur (L16)
+    const vis = () => {
+      if (document.visibilityState === "hidden") {
+        keys.current.clear();
+        recompute();
+        clearHeldInput(input);
+      }
+    };
 
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
+    document.addEventListener("visibilitychange", vis);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);
+      document.removeEventListener("visibilitychange", vis);
     };
   }, [input]);
 }

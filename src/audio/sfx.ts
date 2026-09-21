@@ -176,3 +176,21 @@ export function playHeartbeat(intensity = 1) {
   o.start(t);
   o.stop(t + 0.18);
 }
+
+/** treatment lock-on acquired: crisp two-tone confirm (L19) */
+export function playLockOn() {
+  playBlip(740, 0.07, 0.08);
+  setTimeout(() => playBlip(1108, 0.09, 0.08), 70);
+}
+
+/** per-segment dissolve tick — rises as the clot breaks down (L19/L20) */
+export function playDissolveTick(step: number) {
+  const f = 420 + step * 120;
+  playBlip(f, 0.06, 0.05);
+  setTimeout(() => playBlip(f * 1.5, 0.05, 0.04), 40);
+}
+
+/** flow restored payoff: ascending arpeggio 659/784/988 (L19) */
+export function playFlowRestored() {
+  [659, 784, 988].forEach((f, i) => setTimeout(() => playBlip(f, 0.3, 0.1), i * 110));
+}

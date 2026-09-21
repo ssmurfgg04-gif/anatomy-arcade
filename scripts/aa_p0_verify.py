@@ -59,8 +59,19 @@ with sync_playwright() as p:
     shot(page, "01_menu")
     step("menu_renders", True)
 
-    # ---- 2. how-to-play overlay
-    page.get_by_text("HOW TO PLAY", exact=True).click()
+    # ---- 1b. landing structure: nav, game modes, features (new P5 landing)
+    body = page.inner_text("body")
+    ok = (
+        "GAME MODES" in body.upper()
+        and "HEART ATTACK RESPONSE" in body.upper()
+        and "VIRAL INVASION" in body.upper()
+        and "COMING SOON" in body.upper()
+        and "BIODEX" in body.upper()
+    )
+    step("landing_structure", ok)
+
+    # ---- 2. how-to-play overlay (MEET THE SCIENCE on the new landing)
+    page.get_by_text("MEET THE SCIENCE", exact=True).click()
     wait_text(page, "DESKTOP", 5000)
     time.sleep(0.6)
     shot(page, "02_howtoplay")
@@ -69,8 +80,8 @@ with sync_playwright() as p:
     page.get_by_text("CLOSE", exact=True).click()
     time.sleep(0.4)
 
-    # ---- 3. journal overlay
-    page.get_by_text("JOURNAL", exact=True).first.click()
+    # ---- 3. journal overlay (BIODEX nav opens the journal)
+    page.get_by_text("BIODEX", exact=True).first.click()
     wait_text(page, "ANATOMY JOURNAL", 5000)
     time.sleep(0.6)
     shot(page, "03_journal")
@@ -89,7 +100,7 @@ with sync_playwright() as p:
     step("mission_select_honest", ok)
 
     # ---- 5. briefing
-    page.get_by_text("HEART ATTACK RESPONSE", exact=True).click()
+    page.get_by_role("button", name="01 HEART ATTACK RESPONSE").click()
     wait_text(page, "MISSION BRIEFING", 8000)
     time.sleep(1.0)
     shot(page, "05_briefing")
@@ -139,16 +150,20 @@ with sync_playwright() as p:
         page.get_by_text("SKIP", exact=True).click()
         time.sleep(1.0)
 
-    # ---- 9. scan: teleport near first marker, aim, press Q
-    page.evaluate("window.__aaTp && window.__aaTp(0.09, 0, 0.1)")
-    page.evaluate("window.__aaAimAt && window.__aaAimAt(0.12, 2.6, 0.72)")
-    time.sleep(0.8)
-    page.keyboard.down("KeyQ")
-    time.sleep(0.4)
-    page.keyboard.up("KeyQ")
-    time.sleep(1.5)
-    body = page.inner_text("body")
-    scanned = "ANATOMICAL SCAN" in body
+    # ---- 9. scan: teleport near first marker, aim, press Q (retry — aim race)
+    scanned = False
+    for attempt in range(3):
+        page.evaluate("window.__aaTp && window.__aaTp(0.09, 0, 0.1)")
+        page.evaluate("window.__aaAimAt && window.__aaAimAt(0.12, 2.6, 0.72)")
+        time.sleep(1.0 if attempt == 0 else 0.7)
+        page.keyboard.down("KeyQ")
+        time.sleep(0.4)
+        page.keyboard.up("KeyQ")
+        time.sleep(1.5)
+        if "ANATOMICAL SCAN" in page.inner_text("body"):
+            scanned = True
+            break
+        page.evaluate("window.__aa.getState().activeScan && window.__aa.getState().closeScan()")
     step("scan_panel_opens", scanned)
     shot(page, "10_scan_panel")
     if scanned:
@@ -237,7 +252,7 @@ with sync_playwright() as p:
     wait_text(page, "PLAY", 20000)
     page.evaluate("window.__aa && window.__aa.getState().setPhase('MISSION_SELECT')")
     time.sleep(0.5)
-    page.get_by_text("HEART ATTACK RESPONSE", exact=True).click()
+    page.get_by_role("button", name="01 HEART ATTACK RESPONSE").click()
     wait_text(page, "MISSION BRIEFING", 8000)
     page.get_by_text("BEGIN MISSION", exact=True).click()
     time.sleep(7.0)  # let intro finish
@@ -254,13 +269,34 @@ with sync_playwright() as p:
         phase2 = page.evaluate("window.__aa.getState().phase")
         step("quick_retry", phase2 in ("MISSION_INTRO", "PLAYING"), f"phase={phase2}")
 
+    # ---- 13b. pause suspension: E-hold frozen while paused (L16)
+    page.evaluate("window.__aa && window.__aa.getState().setPhase('MISSION_SELECT')")
+    time.sleep(0.5)
+    page.get_by_role("button", name="01 HEART ATTACK RESPONSE").click()
+    wait_text(page, "MISSION BRIEFING", 8000)
+    page.get_by_text("BEGIN MISSION", exact=True).click()
+    time.sleep(7.0)  # let intro finish
+    # intro end fires OBJECTIVE_COMPLETE briefly (banner) — wait for control handover
+    page.wait_for_function("window.__aa.getState().phase === 'PLAYING'", timeout=20000)
+    page.keyboard.down("KeyW")
+    time.sleep(0.5)
+    page.keyboard.press("Escape")
+    time.sleep(0.5)
+    suspended = page.evaluate("window.__aaInput && window.__aaInput.current.suspended")
+    step("pause_suspends_input", bool(suspended), f"suspended={suspended}")
+    shot(page, "15b_paused")
+    page.get_by_text("RESUME", exact=True).first.click()
+    time.sleep(0.8)
+    resumed = page.evaluate("window.__aaInput && !window.__aaInput.current.suspended")
+    step("resume_unfreezes_input", bool(resumed))
+
     # ---- 14. pause menu on mobile viewport + ticker
     page.set_viewport_size({"width": 390, "height": 844})
     page.goto(BASE, wait_until="domcontentloaded")
     wait_text(page, "PLAY", 20000)
     page.evaluate("window.__aa && window.__aa.getState().setPhase('MISSION_SELECT')")
     time.sleep(0.5)
-    page.get_by_text("HEART ATTACK RESPONSE", exact=True).click()
+    page.get_by_role("button", name="01 HEART ATTACK RESPONSE").click()
     wait_text(page, "MISSION BRIEFING", 8000)
     shot(page, "16_mobile_briefing")
     page.get_by_text("BEGIN MISSION", exact=True).click()

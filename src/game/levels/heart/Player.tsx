@@ -10,6 +10,7 @@ import { useGame } from "@/game/core/state";
 import { consumeLook, movementInput, type InputState } from "@/game/controls/input";
 import { vesselCurve } from "@/game/systems/vessel";
 import { VESSEL_BASE_RADIUS, vesselRadiusAt } from "./vessel";
+import { CAMERA, COMBAT, FEEL, FLIGHT } from "@/game/config";
 
 export interface PlayerRefs {
   pos: THREE.Vector3;
@@ -45,7 +46,7 @@ const _offset = new THREE.Vector3();
 const _camTarget = new THREE.Vector3();
 const _camPos = new THREE.Vector3();
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
-const WALL_MARGIN = 0.18;
+const WALL_MARGIN = COMBAT.WALL_MARGIN;
 
 interface Props {
   player: PlayerRefs;
@@ -63,21 +64,28 @@ export function Player({ player, input, flowRef, beatRef, hitWallRef, quality }:
   const scanRingRef = useRef<THREE.Mesh>(null);
   const phase = useRef<string>("");
 
+  const iframes = useRef(0); // invulnerability window after wall damage
+  const yawPrev = useRef(player.yaw);
+  const rollCur = useRef(0);
+
   useFrame((state, rawDt) => {
-    const dt = Math.min(rawDt, quality === "LOW" ? 0.22 : 0.05);
+    const dt = Math.min(rawDt, quality === "LOW" ? FEEL.DT_CLAMP_LOW : FEEL.DT_CLAMP);
     const g = useGame.getState();
-    const playing = g.phase === "PLAYING" || g.phase === "SCANNING" || g.phase === "INTERACTION";
+    const playing =
+      !input.current.suspended &&
+      (g.phase === "PLAYING" || g.phase === "SCANNING" || g.phase === "INTERACTION");
     const intro = g.phase === "MISSION_INTRO";
     if (g.phase !== phase.current) phase.current = g.phase;
+    iframes.current = Math.max(0, iframes.current - dt);
 
     // ---- look ----
     const { dx, dy } = consumeLook(input);
     player.yaw -= dx;
     player.pitch = THREE.MathUtils.clamp(player.pitch - dy, -1.35, 1.35);
 
-    // ---- propulsion ----
-    const accel = playing ? (player.boosting ? 30 : 17) : 0;
+    // ---- propulsion (feel constants frozen in config.ts, L3) ----
     player.boosting = playing && (input.current.boost || input.current.tBoost);
+    const accel = playing ? (player.boosting ? FLIGHT.ACCEL_BOOST : FLIGHT.ACCEL) : 0;
     const mi = movementInput(input);
     _dir.set(0, 0, 0);
     if (playing) {
@@ -95,13 +103,16 @@ export function Player({ player, input, flowRef, beatRef, hitWallRef, quality }:
       player.vel.addScaledVector(_up, mi.vertical * accel * dt);
       // slight organic drift — feels alive inside a bloodstream
       const t = state.clock.elapsedTime;
-      player.vel.x += Math.sin(t * 1.7) * 0.05;
-      player.vel.y += Math.cos(t * 2.1) * 0.05;
+      player.vel.x += Math.sin(t * FLIGHT.DRIFT_X_FREQ) * FLIGHT.DRIFT;
+      player.vel.y += Math.cos(t * FLIGHT.DRIFT_Y_FREQ) * FLIGHT.DRIFT;
     }
 
-    // damping (slightly floaty but responsive, spec §34)
-    const drag = player.boosting ? 2.2 : 3.0;
+    // damping (slightly floaty but responsive, spec §34) + hard safety cap
+    const drag = player.boosting ? FLIGHT.DRAG_BOOST : FLIGHT.DRAG;
     player.vel.multiplyScalar(1 / (1 + drag * dt));
+    if (player.vel.lengthSq() > FLIGHT.MAX_SPEED * FLIGHT.MAX_SPEED) {
+      player.vel.setLength(FLIGHT.MAX_SPEED);
+    }
     player.pos.addScaledVector(player.vel, dt);
     player.speed = player.vel.length();
 
@@ -125,31 +136,34 @@ export function Player({ player, input, flowRef, beatRef, hitWallRef, quality }:
     const lateral = _offset.length();
     const maxLat = radius - WALL_MARGIN;
     if (lateral > maxLat) {
-      const impact = (lateral - maxLat);
       _offset.normalize();
       player.pos.copy(_center).addScaledVector(_offset, maxLat);
-      // kill outward velocity component, reflect a little
+      // kill outward velocity component, reflect a little; tangential speed KEPT
+      // (slide-don't-stop, L12/L15 — wall-scrape preserves flow momentum)
       const outward = player.vel.dot(_offset);
       if (outward > 0) {
-        player.vel.addScaledVector(_offset, -outward * 1.4);
-        if (outward > 2.2) {
+        player.vel.addScaledVector(_offset, -outward * COMBAT.BOUNCE);
+        if (outward > COMBAT.IMPACT_MIN && iframes.current <= 0) {
+          iframes.current = COMBAT.IFRAMES;
           hitWallRef.current = Math.min(1, outward / 6);
-          g.damagePlayer(Math.min(9, outward * 1.4));
+          g.damagePlayer(Math.min(COMBAT.IMPACT_CAP, outward * COMBAT.IMPACT_DAMAGE));
           player.shake = Math.min(0.5, player.shake + outward * 0.05);
         }
       }
     }
 
-    // ---- heartbeat + shake decay ----
-    player.shake = Math.max(0, player.shake - dt * 1.4);
-    const shakeAmp = player.shake * 0.05 + beatRef.current * 0.004;
+    // ---- heartbeat + shake decay (trauma-style, L20) ----
+    player.shake = Math.max(0, player.shake - dt * CAMERA.SHAKE_DECAY);
+    const shakeAmp = player.shake * CAMERA.SHAKE_AMP + beatRef.current * 0.004;
 
     // ---- camera ----
     const chase = g.cameraMode === "CHASE";
     const e = new THREE.Euler(player.pitch, player.yaw, 0, "YXZ");
     if (chase) {
       // robot visible slightly below camera; camera behind and above
-      _camPos.set(0, 0.55, 1.6).applyEuler(e).add(player.pos);
+      _camPos.set(CAMERA.CHASE_OFFSET.x, CAMERA.CHASE_OFFSET.y, CAMERA.CHASE_OFFSET.z)
+        .applyEuler(e)
+        .add(player.pos);
       // keep camera inside vessel
       const camOff = _camPos.clone().sub(_center);
       const camLat = camOff.length();
@@ -157,21 +171,38 @@ export function Player({ player, input, flowRef, beatRef, hitWallRef, quality }:
         camOff.normalize().multiplyScalar(maxLat);
         _camPos.copy(_center).add(camOff);
       }
-      camera.position.lerp(_camPos, 1 - Math.exp(-12 * dt));
-      _camTarget.copy(player.pos).addScaledVector(_dir, 6);
+      // distance-smoothed follow (L2): rate grows with speed + error so the
+      // camera never swims behind at flight speed
+      const rate =
+        CAMERA.CHASE_RATE_BASE +
+        player.speed * CAMERA.CHASE_RATE_SPEED +
+        _camPos.distanceTo(camera.position) * 2.0;
+      camera.position.lerp(_camPos, 1 - Math.exp(-rate * dt));
+      _camTarget.copy(player.pos).addScaledVector(_dir, CAMERA.CHASE_LEAD);
       camera.lookAt(_camTarget);
     } else {
       camera.position.copy(player.pos);
       _camTarget.set(0, 0, -1).applyEuler(e).add(camera.position);
       camera.lookAt(_camTarget);
     }
-    // heartbeat bob + shake
-    camera.position.y += Math.sin(state.clock.elapsedTime * 2.2) * shakeAmp * 2;
-    camera.position.x += Math.sin(state.clock.elapsedTime * 5.1) * shakeAmp;
 
-    // FOV kick on boost
-    const targetFov = player.boosting && playing ? 88 : 78;
-    player.fov += (targetFov - player.fov) * Math.min(1, dt * 6);
+    // micro-roll from yaw velocity (L4) — banking feel without nausea
+    const yawVel = (player.yaw - yawPrev.current) / Math.max(dt, 1e-4);
+    yawPrev.current = player.yaw;
+    const rollTarget = THREE.MathUtils.clamp(yawVel * CAMERA.ROLL_RATE, -CAMERA.ROLL_MAX, CAMERA.ROLL_MAX);
+    rollCur.current += (rollTarget - rollCur.current) * (1 - Math.exp(-8 * dt));
+    camera.rotateZ(rollCur.current);
+
+    // heartbeat bob + shake
+    camera.position.y += Math.sin(state.clock.elapsedTime * FEEL.BOB_FREQ) * shakeAmp * 2;
+    camera.position.x += Math.sin(state.clock.elapsedTime * FEEL.SHAKE_FREQ) * shakeAmp;
+
+    // FOV: speed widens, boost widens more (L4 — speed you can feel)
+    const targetFov =
+      CAMERA.FOV_BASE +
+      Math.min(CAMERA.FOV_SPEED_MAX, player.speed * CAMERA.FOV_SPEED) +
+      (player.boosting && playing ? CAMERA.FOV_BOOST : 0);
+    player.fov += (targetFov - player.fov) * (1 - Math.exp(-CAMERA.FOV_RATE * dt));
     const cam = camera as THREE.PerspectiveCamera;
     if (Math.abs(cam.fov - player.fov) > 0.05) {
       cam.fov = player.fov;

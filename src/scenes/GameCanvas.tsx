@@ -2,17 +2,22 @@
 /**
  * GameCanvas (spec §17): R3F canvas hosting the active mission. React owns UI;
  * the 3D world stays imperative (refs) — no per-frame React rerenders.
+ * Research law L5/L6/L16: adaptive quality governor drives render scale +
+ * tier hysteresis; pause suspends the sim via the shared input flag.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGame } from "@/game/core/state";
 import { QUALITY_PROFILES, detectQualityTier, type QualityTier } from "@/game/core/quality";
-import { createInputState, useKeyboardInput, usePointerLook } from "@/game/controls/input";
+import { QualityGovernor } from "@/game/quality/governor";
+import { createInputState, clearHeldInput, useKeyboardInput, usePointerLook, type InputState } from "@/game/controls/input";
 import { TouchControls } from "@/game/controls/TouchControls";
 import { TutorialOverlay } from "@/ui/tutorial/TutorialOverlay";
 import { createHeartRefs, HeartMission, type HeartRefs } from "@/game/levels/heart/HeartMission";
 import { updateHum, startHum, playImpact, playHeartbeat, startAmbience, setAudioVolume } from "@/audio/sfx";
+
+const TIER_ORDER: QualityTier[] = ["LOW", "MEDIUM", "HIGH"];
 
 function BeatDriver({ refs }: { refs: HeartRefs }) {
   const { camera } = useThree();
@@ -41,6 +46,28 @@ function BeatDriver({ refs }: { refs: HeartRefs }) {
   return null;
 }
 
+/** Feeds the governor every frame; applies render-scale changes sparingly. */
+function GovernorDriver({
+  governor,
+  onScale,
+}: {
+  governor: QualityGovernor;
+  onScale: (s: number) => void;
+}) {
+  const applied = useRef(1);
+  const onScaleRef = useRef(onScale);
+  onScaleRef.current = onScale;
+  useFrame((_, delta) => {
+    governor.update(delta * 1000);
+    const s = governor.renderScale;
+    if (Math.abs(s - applied.current) > 0.02) {
+      applied.current = s;
+      onScaleRef.current(s);
+    }
+  });
+  return null;
+}
+
 export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
   const qualityPref = useGame((s) => s.settings.quality);
   const qualityResolvedStore = useGame((s) => s.qualityResolved);
@@ -49,16 +76,62 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
   const canvasWrapRef = useRef<HTMLDivElement>(null);
 
   const [tier, setTier] = useState<QualityTier>("MEDIUM");
+  const tierRef = useRef<QualityTier>("MEDIUM");
+  tierRef.current = tier;
+  const maxTier = useRef<QualityTier>("MEDIUM");
+
   useEffect(() => {
     const t = qualityPref === "AUTO" ? detectQualityTier() : qualityPref;
     setTier(t);
+    maxTier.current = t;
     if (qualityResolvedStore !== t) setQualityResolved(t);
   }, [qualityPref, qualityResolvedStore, setQualityResolved]);
+
+  // adaptive quality governor (L5): scale hunts first, tier moves only after
+  // the scale bottoms out / tops out with hysteresis — oscillation impossible
+  const governor = useMemo(
+    () =>
+      new QualityGovernor({
+        onDemote: () => {
+          const i = TIER_ORDER.indexOf(tierRef.current);
+          if (i > 0) setTier(TIER_ORDER[i - 1]);
+        },
+        onPromote: () => {
+          const i = TIER_ORDER.indexOf(tierRef.current);
+          if (i >= 0 && i + 1 <= TIER_ORDER.indexOf(maxTier.current)) setTier(TIER_ORDER[i + 1]);
+        },
+      }),
+    []
+  );
 
   useEffect(() => setAudioVolume(audioMaster), [audioMaster]);
 
   const input = useMemo(() => ({ current: createInputState() }), []);
   const [heartRefs] = useState(() => createHeartRefs(QUALITY_PROFILES[tier].particleCount));
+
+  // keep live particle budget synced to the active tier (L6: particles = big dial)
+  useEffect(() => {
+    heartRefs.particleCount.current = QUALITY_PROFILES[tier].particleCount;
+  }, [tier, heartRefs]);
+
+  // pause suspension (L16): freeze movement + mission sim, kill held inputs
+  const handlePause = useCallback(() => {
+    input.current.suspended = true;
+    clearHeldInput(input);
+    onOpenPause();
+  }, [input, onOpenPause]);
+
+  useEffect(() => {
+    input.current.suspended = false;
+    const onResume = () => {
+      input.current.suspended = false;
+    };
+    window.addEventListener("aa-resume", onResume);
+    return () => {
+      window.removeEventListener("aa-resume", onResume);
+      input.current.suspended = false;
+    };
+  }, [input]);
 
   useEffect(() => {
     (window as unknown as Record<string, unknown>).__aaRefs = heartRefs;
@@ -74,14 +147,14 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
       if (e.code === "Escape") {
         const g = useGame.getState();
         if (g.phase === "PLAYING") {
-          onOpenPause();
+          handlePause();
           if (document.pointerLockElement) document.exitPointerLock?.();
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onOpenPause]);
+  }, [handlePause]);
 
   // start audio on first interaction
   useEffect(() => {
@@ -101,10 +174,25 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
 
   const profile = QUALITY_PROFILES[tier];
 
+  // base DPR from device, clamped to the tier window; governor scales it live
+  const baseDpr = useMemo(() => {
+    const raw = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    return Math.min(Math.max(raw, profile.dpr[0]), profile.dpr[1]);
+  }, [profile]);
+  const [dpr, setDpr] = useState(baseDpr);
+  useEffect(() => {
+    setDpr(baseDpr * governor.renderScale);
+  }, [baseDpr, governor]);
+
+  const onScale = useCallback(
+    (s: number) => setDpr(baseDpr * s),
+    [baseDpr]
+  );
+
   return (
     <div ref={canvasWrapRef} className="fixed inset-0 z-10 bg-[#04070c]">
       <Canvas
-        dpr={profile.dpr}
+        dpr={dpr}
         camera={{ position: [0, -2, -88], fov: 78, near: 0.05, far: 160 }}
         gl={{ antialias: tier !== "LOW", alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
@@ -116,8 +204,9 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
         <fog attach="fog" args={["#0b0507", 12, 72]} />
         <HeartMission refs={heartRefs} input={input} quality={tier} />
         <BeatDriver refs={heartRefs} />
+        <GovernorDriver governor={governor} onScale={onScale} />
       </Canvas>
-      <TouchControls input={input} onPause={onOpenPause} />
+      <TouchControls input={input} onPause={handlePause} />
       <TutorialOverlay input={input} />
     </div>
   );

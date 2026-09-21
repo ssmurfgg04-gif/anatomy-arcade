@@ -14,6 +14,8 @@ const _q = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 const _mtx = new THREE.Matrix4();
 const _t = new THREE.Vector3();
+const _spin = new THREE.Quaternion();
+const _upAxis = new THREE.Vector3(0, 1, 0);
 
 interface CellSeed {
   t: number;
@@ -24,6 +26,7 @@ interface CellSeed {
   tumble: THREE.Euler;
   isPlatelet: boolean;
   wobblePhase: number;
+  spinSpeed: number; // constant per-instance roll rate (L27 wind law)
 }
 
 function turbulenceAt(t: number, cleared: number): number {
@@ -42,12 +45,14 @@ export function BloodCells({
   countRef,
   flowRef,
   beatRef,
+  playerPos,
   lowTier,
 }: {
   count: number;
   countRef: React.MutableRefObject<number>;
   flowRef: React.MutableRefObject<number>;
   beatRef: React.MutableRefObject<number>;
+  playerPos?: THREE.Vector3;
   lowTier?: boolean;
 }) {
   const rbcRef = useRef<THREE.InstancedMesh>(null);
@@ -71,20 +76,40 @@ export function BloodCells({
         tumble: new THREE.Euler(rng() * 6.3, rng() * 6.3, rng() * 6.3),
         isPlatelet,
         wobblePhase: rng() * Math.PI * 2,
+        spinSpeed: (rng() < 0.5 ? -1 : 1) * (0.6 + rng() * 1.8),
       });
     }
     return arr;
   }, [countRef]);
 
   const rbcGeo = useMemo(() => {
-    // biconcave-ish disc via lathe — cheap, readable silhouette
-    const pts: THREE.Vector2[] = [];
-    for (let i = 0; i <= 10; i++) {
-      const a = (i / 10) * Math.PI;
-      pts.push(new THREE.Vector2(Math.sin(a) * 0.5, Math.cos(a) * 0.16 - 0.02));
+    // TRUE biconcave disc (L25): thick rim, dimpled center — the RBC silhouette
+    const pts: THREE.Vector2[] = [
+      new THREE.Vector2(0.0, -0.05),
+      new THREE.Vector2(0.18, -0.062),
+      new THREE.Vector2(0.34, -0.075),
+      new THREE.Vector2(0.46, -0.045),
+      new THREE.Vector2(0.5, 0.0),
+      new THREE.Vector2(0.46, 0.045),
+      new THREE.Vector2(0.34, 0.075),
+      new THREE.Vector2(0.18, 0.062),
+      new THREE.Vector2(0.0, 0.05),
+    ];
+    return new THREE.LatheGeometry(pts, lowTier ? 10 : 14);
+  }, [lowTier]);
+
+  // one-time per-instance color variance (deep-red spread, zero per-frame cost)
+  const colorized = useRef(false);
+  const paintInstances = (mesh: THREE.InstancedMesh | null, n: number) => {
+    if (!mesh || colorized.current) return;
+    const c = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      const v = 0.82 + ((i * 2654435761) % 1000) / 1000 * 0.42; // deterministic hash
+      c.setRGB(Math.min(1, 0.63 * v + 0.08), 0.055 * v, 0.07 * v);
+      mesh.setColorAt(i, c);
     }
-    return new THREE.LatheGeometry(pts.reverse(), 14);
-  }, []);
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  };
 
   useFrame((state, dt) => {
     const flow = flowRef.current;
@@ -94,7 +119,11 @@ export function BloodCells({
 
     let rbcIdx = 0;
     let pltIdx = 0;
-    for (const s of seeds) {
+    // governor count cap (L6): instance buffer may exceed the live count
+    const live = Math.min(seeds.length, countRef.current);
+    paintInstances(rbcRef.current, live);
+    for (let i = 0; i < live; i++) {
+      const s = seeds[i];
       // flow velocity: slowed + recirculating near obstructions until cleared
       const turb = turbulenceAt(s.t, flow);
       const localSpeed = baseSpeed * s.speed * (1 - 0.85 * turb) * (1 + 0.2 * Math.sin(time * 2 + s.wobblePhase));
@@ -109,6 +138,24 @@ export function BloodCells({
       offsetPoint(s.t, angle, dist, flow, _pos);
       vesselCurve.getTangentAt(s.t, _t);
       _q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), _t);
+      // constant-rate roll around the flow axis (L25/L27 — cells tumble as they travel)
+      _spin.setFromAxisAngle(_upAxis, time * s.spinSpeed);
+      _q.multiply(_spin);
+
+      // player wake (L25 SDF wake): cells part and swirl around the robot
+      if (playerPos) {
+        const dx = _pos.x - playerPos.x;
+        const dy = _pos.y - playerPos.y;
+        const dz = _pos.z - playerPos.z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < 0.42 && d2 > 1e-6) {
+          const d = Math.sqrt(d2);
+          const f = ((0.65 - d) / 0.65) * 0.5;
+          _pos.x += (dx / d) * f;
+          _pos.y += (dy / d) * f;
+          _pos.z += (dz / d) * f;
+        }
+      }
 
       _scale.setScalar(s.scale * (s.isPlatelet ? 0.38 : 1));
       _mtx.compose(_pos, _q, _scale);

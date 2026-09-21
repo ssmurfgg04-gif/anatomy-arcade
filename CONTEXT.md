@@ -29,8 +29,9 @@
 | P1 | Scaffold Next.js + R3F + game folder structure | ✅ DONE |
 | P2 | Core game engine: state machine, controls (WASD/mouse + touch joystick), camera modes, player feel | ✅ DONE |
 | P3 | HEART MISSION vertical slice: vessel world, blood flow, plaque/clot, intervention, flow-restored payoff | ✅ PLAYABLE E2E (browser-verified) |
-| P4 | Assets: research DONE (docs/ASSET-RESEARCH.md, CC-BY top picks); downloads blocked on Sketchfab API token | PENDING TOKEN |
-| P5 | Main menu + mission select + full-body explorer | PENDING |
+| P4 | Assets: research DONE (docs/ASSET-RESEARCH.md, CC-BY top picks); repo-lessons research DONE (docs/RESEARCH/RA-1..4 + LESSONS.md, 19 repos); downloads blocked on Sketchfab API token | PARTIAL (token) |
+| P5 | Landing page per user's UI reference image (nav/hero/organ labels/game modes/features) + MenuScene polish + 30Hz demand-loop | ✅ DONE (E2E verified) |
+| P5.5 | Engine feel/perf pass: config.ts frozen constants, murmur QualityGovernor (renderScale + tier hysteresis), distance-smoothed chase cam + speed FOV + micro-roll, i-frames + slide collision, biconcave spinning RBCs + player wake, pause suspension, lock-on/dissolve/flow sfx | ✅ DONE |
 | P6 | Educational layer + Qwen scan integration (server route, validated, static fallback) | PENDING |
 | P7 | Viral Invasion + Brain Mission | PENDING |
 | P8 | Audio, polish, performance tiers, mobile hardening | PENDING |

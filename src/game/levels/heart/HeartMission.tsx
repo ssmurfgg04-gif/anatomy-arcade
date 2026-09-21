@@ -15,6 +15,7 @@ import { BloodCells } from "./BloodCells";
 import { Obstructions, type ClotSegment } from "./Obstructions";
 import { Player, createPlayerRefs } from "./Player";
 import { HEART_OBJECTIVE_ZONES, vesselRadiusAt, VESSEL_BASE_RADIUS } from "./vessel";
+import { playLockOn, playDissolveTick, playFlowRestored } from "@/audio/sfx";
 
 const _center = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -71,6 +72,7 @@ export function HeartMission({ refs, input, quality }: Props) {
   const scanLatch = useRef(false);
   const scanTap = useRef(false); // edge-triggered scan (never missed at low fps)
   const aimClot = useRef(false); // reticle currently on a clot segment
+  const dissolveTick = useRef(0); // last played dissolve bucket (0..3)
 
   // scan taps arrive via keyboard events / touch button events, not polling
   useEffectReact(() => {
@@ -96,6 +98,8 @@ export function HeartMission({ refs, input, quality }: Props) {
     const g = useGame.getState();
     const time = state.clock.elapsedTime;
 
+    // pause suspension (L16): freeze the entire mission sim, beat included
+    if (input.current.suspended) return;
     // BPM: 108 arrhythmic -> 74 healthy
     const flow = refs.flow.current;
     const bpm = 108 - flow * 34;
@@ -176,6 +180,7 @@ export function HeartMission({ refs, input, quality }: Props) {
       }
       if (aiming !== aimClot.current) {
         aimClot.current = aiming;
+        if (aiming) playLockOn(); // treatment lock-on acquired (L19)
         window.dispatchEvent(new CustomEvent("aa-aim-clot", { detail: { aiming } }));
       }
       if (aiming && (input.current.interact || input.current.tInteract)) {
@@ -211,6 +216,13 @@ export function HeartMission({ refs, input, quality }: Props) {
         }
         if (dissolvedThisFrame > 0) {
           g.addScore(Math.round(dissolvedThisFrame * 90));
+          // rising per-segment dissolve chirps (L19): 4 buckets
+          const p = 1 - refs.clot.current.reduce((a, s) => a + s.hp, 0) / refs.clot.current.length;
+          const bucket = Math.min(3, Math.floor(p * 4));
+          if (bucket > dissolveTick.current) {
+            dissolveTick.current = bucket;
+            playDissolveTick(bucket);
+          }
           if (!refs.dissolved.current) {
             refs.dissolved.current = true;
             window.dispatchEvent(new CustomEvent("aa-dissolve"));
@@ -219,6 +231,7 @@ export function HeartMission({ refs, input, quality }: Props) {
       }
       const allClear = refs.clot.current.every((s) => s.hp <= 0);
       if (allClear && !g.objectives[3].done) {
+        dissolveTick.current = 0;
         g.completeObjective(3);
       }
     }
@@ -230,6 +243,7 @@ export function HeartMission({ refs, input, quality }: Props) {
       g.setFlowHealth(f);
       g.setPatientStatus(62 + f * 30);
       if (f >= 0.98) {
+        playFlowRestored(); // payoff arpeggio (L19)
         g.completeObjective(4);
         g.addScore(800);
       }
@@ -347,7 +361,7 @@ export function HeartMission({ refs, input, quality }: Props) {
   return (
     <group>
       <VesselTube flowRef={refs.flow} beatRef={refs.beat} segments={quality === "LOW" ? 200 : quality === "MEDIUM" ? 360 : 520} lowTier={quality === "LOW"} />
-      <BloodCells count={particleCount.current} countRef={particleCount} flowRef={refs.flow} beatRef={refs.beat} lowTier={quality === "LOW"} />
+      <BloodCells count={particleCount.current} countRef={particleCount} flowRef={refs.flow} beatRef={refs.beat} playerPos={refs.player.pos} lowTier={quality === "LOW"} />
       <Obstructions clotRef={refs.clot} flowRef={refs.flow} beatRef={refs.beat} lowTier={quality === "LOW"} />
       <Player
         player={refs.player}

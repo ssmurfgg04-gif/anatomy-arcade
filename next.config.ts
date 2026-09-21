@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  // clean screenshots / no dev-overlay chrome in captures
+  devIndicators: false,
 };
 
 export default nextConfig;
