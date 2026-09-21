@@ -29,3 +29,20 @@ Work Log:
 Stage Summary:
 - P0 complete. Project + context system durable on GitHub in two repos.
 - Next: P1 scaffold (Next.js + R3F), taste-skill install per spec §0.
+---
+Task ID: P4-research
+Agent: subagent
+Task: Research openly-licensed 3D anatomy assets for WebGL biology game; produce docs/ASSET-RESEARCH.md (candidates report, no app code changes).
+
+Work Log:
+- Read CONTEXT.md + worklog.md for background; anatomy-arcade-history.md not present in sandbox.
+- Queried Sketchfab public API (no auth): 30+ searches across 10 categories (heart, RBC, WBC, platelet, plaque/thrombus, virus, neuron, brain, body, lung/alveoli); learned `license` filter only accepts cc0 → bucketed CC-BY/NC locally from license.label in unfiltered results; 644 unique models collected.
+- Fetched /v3/models/{uid} details for 63 shortlisted candidates (author, license, vertex/face counts, animationCount, description).
+- Checked free libraries: Quaternius (CC0, no anatomy), Kenney (CC0, no biology), Poly Haven models API (521 models, only clinic set-dressing), CC0Models (DNS unreachable), poly.pizza (API key required). GitHub: anatomed-mcp (CC-BY-SA-4.0), cochlea-generator (CC-BY-4.0 procedural ref), Z-Anatomy (LluisV, ★390, CC-BY-SA full-body source).
+- Wrote docs/ASSET-RESEARCH.md: criteria header, 10 category tables (56 candidates), TOP PICKS (1/category), NC RESTRICTED (14 NC + 5 "Free Standard"), PROCEDURAL RECOMMENDED (7 items), DOWNLOAD QUEUE (20 UIDs, P0–P3, authenticated download endpoint format), open risks.
+
+Stage Summary:
+- All 10 categories have a viable CC-BY 4.0 top pick (no CC0 organ-level assets exist; CC0 only for heavy brain/virus scans).
+- Hero heart: Realistic Human Heart by neshallads (CC-BY, 22.5k tris). Cells all <5k tris. NC list recorded so nobody grabs E-learning UMCG / HannahNewey models by accident.
+- Vessels/flow/plaque/neural-net/alveoli clusters to be built procedurally in Three.js (documented with techniques).
+- Next: P4 download phase needs $SKETCHFAB_API_TOKEN for /v3/models/{uid}/download (GLB), then Draco/meshopt + ASSETS.md attribution rows.
