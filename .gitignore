@@ -13,3 +13,4 @@ tool-results/
 .zscripts/
 db/*.db
 dev-server/
+tmp-research/
