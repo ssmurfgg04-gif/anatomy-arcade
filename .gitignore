@@ -1,2 +1,15 @@
-skills/
 node_modules/
+.next/
+out/
+*.log
+.DS_Store
+tmp/
+.cortexm/
+.env
+context-m/
+download/
+upload/
+tool-results/
+.zscripts/
+db/*.db
+dev-server/
