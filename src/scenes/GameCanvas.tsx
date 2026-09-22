@@ -213,7 +213,9 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
           gl.toneMappingExposure = 1.05;
         }}
       >
-        <color attach="background" args={["#05080e"]} />
+        {mission === "heart" && <color key="bg-heart" attach="background" args={["#160409"]} />}
+        {mission === "viral" && <color key="bg-viral" attach="background" args={["#1c0f14"]} />}
+        {mission === "brain" && <color key="bg-brain" attach="background" args={["#0a0a18"]} />}
         <fog attach="fog" args={["#0b0507", 12, 72]} />
         {mission === "heart" && <HeartMission key="heart" refs={heartRefs} input={input} quality={tier} />}
         {mission === "viral" && <ViralMission key="viral" refs={viralRefs} input={input} quality={tier} />}

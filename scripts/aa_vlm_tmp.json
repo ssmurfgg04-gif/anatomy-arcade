@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided image, here is the analysis:\n\n(1) **Human Figure:** Yes, a full human figure silhouette is visible. It is a dark, translucent teal/black figure standing upright and centered in the frame. The head is at the top (around 12% from the top), and the feet are at the bottom (around 95% from the top). The pose is a standard anatomical position with arms slightly away from the body.\n\n(2) **Visible Glowing Dots:**\n*   **Pink/Red Dot:** Located at approximately **50.5% from left, 26% from top** (center-chest area).\n*   *Note: The expected cyan dot at the head and amber dot at the upper-chest-left are not clearly visible or are extremely faint in this specific crop.*\n\n(3) **Other Bright Shapes or Text:** \n*   There is some very blurry, out-of-focus text on the far left side of the image (partially looks like \"TOM\" or similar letters), but it is heavily blurred and dark.\n*   There are some faint, out-of-focus bokeh-like light spots in the background on the right side.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790056098,
+  "id": "202609221348003c2a002a4d96406d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609221348003c2a002a4d96406d",
+  "usage": {
+    "completion_tokens": 244,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 422,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 666
+  }
+}

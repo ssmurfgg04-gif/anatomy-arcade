@@ -240,3 +240,42 @@ Stage Summary:
 - All three missions playable on the same 10-stage arc; heart mission untouched (priority law held).
 - VLM round 1 logged + fixed; rounds 2-5 pending.
 - Next: E2E run 3 green check, BioDex body-mesh wiring (subagent), P6 journal polish, VLM round 2, GitHub push.
+
+---
+Task ID: 5
+Agent: biodex-wiring subagent
+Task: Wire the 3D body meshes into the BioDex (ANATOMY JOURNAL) — BodyMap ghost-figure explorer with organ markers, EntryMesh heart previews on cardiac entries, Journal v2 region filters, and Playwright visual QA.
+
+Work Log:
+- Read worklog + CONTEXT; found Task-5 files already staged by an earlier interrupted pass (BodyMap.tsx, EntryMesh.tsx, Overlays.tsx BIODEX v2, aa_biodex_shot.py) with no worklog entry and a broken visual state — took over, audited against the task spec, fixed, and drove QA to green.
+- Verified wiring: page.tsx mounts Journal only when uiOverlay==='JOURNAL'; BodyMap/EntryMesh are dynamic(ssr:false) chunks with 280px/176px skeleton placeholders, so the GLB canvases + useGLTF.preload never run on the main menu; drei ^10.7.8 present so useGLTF is used; OverlayShell + CLOSE + Esc + "{n} of {total} discovered." and the discovery gating ("??? UNDISCOVERED") untouched.
+- Spec-tightened the staged code: removed the leftover TEMP window.__bmDebug debug hook from BodyMap; heart organ pin recolored to the brand crimson #C21E3A (spec accent per region); Journal grid now mounts EntryMesh only on the two flagship cardiac entries heartChamber + coronaryArtery per task item 3 (EntryMesh keeps its defensive 5-id guard per item 2) — also halves simultaneous WebGL contexts on mobile.
+- BUG FOUND+FIXED (why the earlier pass kept "iterating until the body renders"): the ghost body rendered near-black AND depth-occluded the head/chest organ pins — a GPU readPixels probe showed body pixels at (0,2,4) with pins behind the shell, only 1 stray bright cluster on the whole canvas. Fix: ghost MeshStandardMaterial gains depthWrite:false (pins live inside the body volume; the shell alpha-blends over them, x-ray style) + a same-family emissive #1b4a56 @ 0.5 so the figure survives ACES tone mapping on every GPU tier. Post-fix readback: cyan pin (177,233,235), amber (244,220,141), crimson ~(243,50,82), torso (0,40,52) vs bg (4,7,12).
+- Hardened scripts/aa_biodex_shot.py: old gates (std>2.0) passed an effectively blank body map (std 2.51); new gates require std>5.0, >100 unique colors, >=100 bright pixels and >=3 distinct >=20px clusters (the three organ pins). Bonus desktop check: injects heartChamber + coronaryArtery discoveries via window.__aa.getState().addDiscovery, then element-screenshots both EntryMesh canvases — locator scoped to the overlay root via a data attribute (document-wide canvas locator was silently grabbing the landing MenuScene canvas behind the modal).
+- QA green: `bun x tsc --noEmit` 0 errors; `bunx eslint src/ui/overlays` 0 problems; `python3 scripts/aa_biodex_shot.py` PASS 14/14 (desktop canvas std 9.0 / 614 colors / 3 pin clusters; mobile std 12.2 / canvas fits 348px width / overlay scrolls 2415px). VLM sanity check on the shots: "translucent dark 3D human body silhouette head to feet, three glowing markers cyan/amber/crimson, no rendering artifacts"; both entry previews confirmed as a cleanly rendered heart. Diagnostic probe script removed after use (kept the repo tree to the allowed paths).
+
+Stage Summary:
+- BIODEX v2 is a true body-map explorer: demand-loop 3D ghost figure (body_silhouette.glb, 30k tris, CC BY 4.0 BodyParts3D — attribution intact in CREDITS) with tappable BRAIN/LUNGS/HEART pins driving the lifted region filter; ALL/HEART/LUNGS/BRAIN filters map all 19 ANATOMY ids (heart 7, lungs 7, brain 5); discovered heartChamber + coronaryArtery cards render the heart_hero.glb preview above their text.
+- Perf laws held: frameloop="demand" + 24Hz setInterval invalidate pacers that stop on document.hidden, dpr [1,1.5], no shadows, low-power GL context, touchAction pan-y so the overlay still scrolls over the canvas; model chunks load only inside the open Journal.
+- Artifacts: src/ui/overlays/{BodyMap.tsx,EntryMesh.tsx,Overlays.tsx}; scripts/aa_biodex_shot.py; shots aa_biodex_shot.png, aa_biodex_shot_mobile.png, aa_biodex_shot_mobile_scrolled.png, aa_biodex_entry_preview_{1,2}.png.
+- Documented deviations: ghost material adds emissive + depthWrite:false beyond the literal material spec (required for visibility and the pin-occlusion fix); chest pins nudged to lungs [-0.06,1.26,0.02] / heart [0.03,1.32,0.08] so both chest pins stay separately tappable (spec said "~" positions); entry previews limited to heartChamber/coronaryArtery per the task text rather than all 5 supported heart ids.
+- Next for parent: git commit (not done here per instructions); optional polish later — pin label chips or a camera fly-to on region select.
+
+---
+Task ID: 6
+Agent: main
+Task: VLM round 2 + fixes; BioDex v2 (subagent Task 5) verification; P8 mobile/audio pass; final E2E verification; docs + push.
+
+Work Log:
+- Dispatched biodex-wiring subagent (Task 5): BIODEX v2 — BodyMap.tsx (demand-loop R3F canvas, ghost body_silhouette.glb w/ depthWrite:false x-ray blend + BRAIN/LUNGS/HEART emissive pins, tap-to-select, 24Hz pacer that stops when hidden), EntryMesh.tsx (heart_hero.glb preview on heartChamber/coronaryArtery), Journal upgraded w/ region filters ALL/HEART/LUNGS/BRAIN (19 ids mapped). Subagent self-QA: tsc 0, eslint 0, Playwright shot script w/ GPU readback pin-cluster gates 14/14. Independently verified: tsc/eslint clean, screenshots reviewed (desktop + mobile render correctly).
+- VLM ROUND 2: captured 16 shots of full build (3 missions + BioDex + fixes), 12 critiques. Extracted real signal vs SwiftShader noise; found genuine bugs my own review confirmed: (1) MOBILE WHITEOUT — player spotlight 110 blew out coral airway wall; (2) screen-filling near-camera cells (long-standing, all missions); (3) black-void bg (clear color != fog color); (4) TRAINING card lingering (escape hatch too late, no timeout).
+- FIXES: spotlight 110/90 -> 72/58 both players; viral wall albedo -20%; cell law rework (RBC ceiling 1.25/1.3, near-camera smooth shrink inside 0.95u, FLOW-RECYCLE wrap at t=0.86 — seed-time caps cannot hold, flow passes through); per-mission canvas bg = fog color; tutorial escape at objective >=4 + 22s hard timeout; mobile vitals title hidden; brain cavern brightened.
+- P8 pass: haptics via sfx layer (playImpact 30ms, playLockOn 12ms, playDissolveTick 10+4*step, playFlowRestored [20,60,40]) — all missions inherit; motionReduced now gates in-game shake + micro-roll (heart Player + SharedPlayer). Viewport meta already hardened (maximumScale=1, userScalable=false, viewportFit=cover).
+- Verified by my own screenshot review after each fix (r2_04b/r2_06c/r2_07b/r2_13d/r2_15b): whiteout gone, hero heart + neuron cavern payoffs read, void replaced by fog-matched medium.
+- FINAL E2E: heart aa_p6_ten_stages 20/20 PASS; viral+brain aa_p7_missions 32/32 PASS — after ALL changes.
+- CONTEXT.md updated (P6/P7 done, P8 sandbox-scope done, P9 rounds 1-2 done; D8-D10 decisions; verified-working refreshed).
+
+Stage Summary:
+- All three missions playable, E2E-green, mobile-checked; BioDex v2 wired to real anatomy meshes (CC BY 4.0 attribution intact); VLM rounds 1-2 logged with fixes; P8 sandbox-scope complete.
+- Remaining (honest): VLM rounds 3-5, real-device mobile pass (spec §39), prod Qwen latency check.
+- Pushed: P7 milestone (441edf5) + final milestone (this commit).

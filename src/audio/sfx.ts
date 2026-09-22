@@ -40,6 +40,19 @@ export function unlockAudio() {
   ac();
 }
 
+/**
+ * Haptic punctuation (P8 mobile hardening): tiny navigator.vibrate patterns
+ * on the same moments the sfx fire. Silent no-op where unsupported. Patterns
+ * are deliberately short — feedback, not buzz.
+ */
+export function haptic(pattern: number | number[]) {
+  try {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      (navigator as Navigator & { vibrate: (p: number | number[]) => boolean }).vibrate(pattern);
+    }
+  } catch {}
+}
+
 export function startAmbience() {
   const a = ac();
   if (!a || ambienceStarted) return;
@@ -146,6 +159,7 @@ export function playSuccess() {
 }
 
 export function playImpact() {
+  haptic(30);
   const a = ac();
   if (!a) return;
   const t = a.currentTime;
@@ -179,12 +193,14 @@ export function playHeartbeat(intensity = 1) {
 
 /** treatment lock-on acquired: crisp two-tone confirm (L19) */
 export function playLockOn() {
+  haptic(12);
   playBlip(740, 0.07, 0.08);
   setTimeout(() => playBlip(1108, 0.09, 0.08), 70);
 }
 
 /** per-segment dissolve tick — rises as the clot breaks down (L19/L20) */
 export function playDissolveTick(step: number) {
+  haptic(10 + step * 4);
   const f = 420 + step * 120;
   playBlip(f, 0.06, 0.05);
   setTimeout(() => playBlip(f * 1.5, 0.05, 0.04), 40);
@@ -192,5 +208,6 @@ export function playDissolveTick(step: number) {
 
 /** flow restored payoff: ascending arpeggio 659/784/988 (L19) */
 export function playFlowRestored() {
+  haptic([20, 60, 40]);
   [659, 784, 988].forEach((f, i) => setTimeout(() => playBlip(f, 0.3, 0.1), i * 110));
 }

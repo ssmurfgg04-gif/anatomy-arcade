@@ -85,12 +85,20 @@ export function TutorialOverlay({ input }: { input: React.MutableRefObject<Input
   }, [stepIdx, finishing]);
 
   // late-mission escape hatch: if the player is already deep into the arc
-  // (stage 6+), the controls are clearly known — end training automatically
-  // so the card never fights the treatment UI (VLM round 1)
+  // (stage 5+), the controls are clearly known — end training automatically
+  // so the card never fights the treatment UI (VLM round 1 + round 2)
   useEffect(() => {
     if (finishing || tutorialDone) return;
-    if (currentObjective >= 5) complete();
+    if (currentObjective >= 4) complete();
   }, [currentObjective, finishing, tutorialDone]);
+
+  // hard timeout: the training card must never outlive the opening moments
+  // (VLM round 2 — TRAINING card seen during the scanner stage)
+  useEffect(() => {
+    if (phase !== "PLAYING" || tutorialDone || finishing) return;
+    const id = setTimeout(() => complete(), 22000);
+    return () => clearTimeout(id);
+  }, [phase, tutorialDone, finishing]);
 
   // progress polling (movement + look deltas from the live rig)
   useEffect(() => {

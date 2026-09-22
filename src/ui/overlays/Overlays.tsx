@@ -4,9 +4,12 @@
  * only), JOURNAL (the BIODEX — discovered anatomy), CREDITS. Opened from main
  * menu, pause menu and results via useGame.uiOverlay.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useGame } from "@/game/core/state";
 import { ANATOMY } from "@/game/data/anatomy";
+// type-only import: erased at build time, does NOT pull the BodyMap chunk out of dynamic()
+import type { BodyRegion } from "./BodyMap";
 
 function OverlayShell({
   title,
@@ -43,6 +46,56 @@ function OverlayShell({
     </div>
   );
 }
+
+/**
+ * BIODEX v2 (journal upgrade): the 3D body map + heart entry previews are
+ * code-split client-only chunks — they must never mount on the main menu, only
+ * inside the open Journal (dynamic + ssr:false + skeleton placeholders).
+ */
+const BodyMap = dynamic(() => import("./BodyMap"), {
+  ssr: false,
+  loading: () => <div className="h-[280px] w-full animate-pulse bg-cyan-400/5" />,
+});
+const EntryMesh = dynamic(() => import("./EntryMesh"), {
+  ssr: false,
+  loading: () => <div className="h-44 w-full animate-pulse bg-cyan-400/5" />,
+});
+
+/** Anatomy id -> body region for the journal filter (kept in sync with BodyMap markers). */
+const ANATOMY_REGION: Record<string, BodyRegion | "other"> = {
+  // heart — circulatory / coronary mission cluster
+  coronaryArtery: "heart",
+  heartChamber: "heart",
+  thrombus: "heart",
+  plaque: "heart",
+  vesselWall: "heart",
+  redBloodCell: "heart",
+  platelet: "heart",
+  // lungs — respiratory / viral mission cluster (immune responders live here too)
+  alveolus: "lungs",
+  alveolarSac: "lungs",
+  airwayWall: "lungs",
+  infectedCell: "lungs",
+  virus: "lungs",
+  macrophage: "lungs",
+  whiteBloodCell: "lungs",
+  // brain — neural / stroke mission cluster (cerebral vessel pathology included)
+  neuron: "brain",
+  axon: "brain",
+  synapse: "brain",
+  aneurysm: "brain",
+  weakWall: "brain",
+};
+
+/** Entries that render the heart_hero.glb EntryMesh preview above their text (the two flagship cardiac entries). EntryMesh itself still accepts the wider heart id set defensively. */
+const ENTRY_PREVIEW_IDS = new Set(["heartChamber", "coronaryArtery"]);
+
+const REGION_FILTERS: { key: BodyRegion | null; label: string }[] = [
+  { key: null, label: "ALL" },
+  { key: "heart", label: "HEART" },
+  { key: "lungs", label: "LUNGS" },
+  { key: "brain", label: "BRAIN" },
+];
 
 export function HowToPlay() {
   const setUiOverlay = useGame((s) => s.setUiOverlay);
@@ -105,22 +158,63 @@ export function HowToPlay() {
 export function Journal() {
   const setUiOverlay = useGame((s) => s.setUiOverlay);
   const discoveries = useGame((s) => s.discoveries);
+  // lifted region state: BodyMap markers and the filter row drive the same value
+  const [region, setRegion] = useState<BodyRegion | null>(null);
   const close = () => setUiOverlay(null);
   const found = new Set(discoveries.map((d) => d.id));
+  const entries = Object.values(ANATOMY).filter(
+    (a) => region === null || (ANATOMY_REGION[a.id] ?? "other") === region
+  );
 
   return (
     <OverlayShell title="ANATOMY JOURNAL" onClose={close}>
+      <div className="mt-1 flex items-baseline gap-3">
+        <span className="font-mono text-[9px] tracking-[0.4em] text-cyan-300/70">BIODEX v2 // BODY MAP</span>
+      </div>
       <p className="mt-3 text-sm leading-relaxed text-white/70">
         Every structure you scan is recorded here. {discoveries.length} of {Object.keys(ANATOMY).length} discovered.
       </p>
+
+      {/* 3D body map — tap a glowing organ marker to filter the journal */}
+      <div className="mt-4 overflow-hidden rounded-sm border border-white/12 bg-black/40">
+        <div className="h-[280px] w-full">
+          <BodyMap selected={region} onSelect={setRegion} />
+        </div>
+      </div>
+
+      {/* region filter row (ALL / HEART / LUNGS / BRAIN), driven by the map selection */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {REGION_FILTERS.map((f) => {
+          const active = region === f.key;
+          return (
+            <button
+              key={f.label}
+              className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] tracking-[0.3em] transition ${
+                active
+                  ? "border-cyan-300/60 bg-cyan-400/10 text-cyan-100"
+                  : "border-white/15 text-white/50 hover:border-cyan-300/30 hover:text-cyan-100/80"
+              }`}
+              onClick={() => setRegion(f.key)}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mt-5 grid gap-3 pb-10 sm:grid-cols-2">
-        {Object.values(ANATOMY).map((a) => {
+        {entries.map((a) => {
           const known = found.has(a.id);
           return (
             <div
               key={a.id}
               className={`rounded-sm border p-4 ${known ? "border-cyan-300/30 bg-cyan-400/5" : "border-white/10 bg-black/40"}`}
             >
+              {known && ENTRY_PREVIEW_IDS.has(a.id) && (
+                <div className="mb-3 overflow-hidden rounded-sm border border-white/10">
+                  <EntryMesh id={a.id} />
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className={`font-mono text-xs font-semibold tracking-[0.2em] ${known ? "text-cyan-100" : "text-white/35"}`}>
                   {known ? a.title : "??? UNDISCOVERED"}

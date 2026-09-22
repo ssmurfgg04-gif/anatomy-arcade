@@ -142,9 +142,11 @@ export function SharedPlayer({ world, player, input, flowRef, beatRef, hitWallRe
       }
     }
 
-    // ---- shake decay ----
+    // ---- shake decay (motionReduced flattens it — accessibility, P8) ----
     player.shake = Math.max(0, player.shake - dt * CAMERA.SHAKE_DECAY);
-    const shakeAmp = player.shake * CAMERA.SHAKE_AMP + beatRef.current * 0.004;
+    const shakeAmp = g.settings.motionReduced
+      ? 0
+      : player.shake * CAMERA.SHAKE_AMP + beatRef.current * 0.004;
 
     // ---- camera ----
     const chase = g.cameraMode === "CHASE";
@@ -174,9 +176,11 @@ export function SharedPlayer({ world, player, input, flowRef, beatRef, hitWallRe
 
     const yawVel = (player.yaw - yawPrev.current) / Math.max(dt, 1e-4);
     yawPrev.current = player.yaw;
-    const rollTarget = THREE.MathUtils.clamp(yawVel * CAMERA.ROLL_RATE, -CAMERA.ROLL_MAX, CAMERA.ROLL_MAX);
-    rollCur.current += (rollTarget - rollCur.current) * (1 - Math.exp(-8 * dt));
-    camera.rotateZ(rollCur.current);
+    if (!g.settings.motionReduced) {
+      const rollTarget = THREE.MathUtils.clamp(yawVel * CAMERA.ROLL_RATE, -CAMERA.ROLL_MAX, CAMERA.ROLL_MAX);
+      rollCur.current += (rollTarget - rollCur.current) * (1 - Math.exp(-8 * dt));
+      camera.rotateZ(rollCur.current);
+    }
 
     camera.position.y += Math.sin(state.clock.elapsedTime * FEEL.BOB_FREQ) * shakeAmp * 2;
     camera.position.x += Math.sin(state.clock.elapsedTime * FEEL.SHAKE_FREQ) * shakeAmp;
@@ -223,7 +227,7 @@ export function SharedPlayer({ world, player, input, flowRef, beatRef, hitWallRe
         angle={0.62}
         penumbra={0.75}
         distance={26}
-        intensity={quality === "LOW" ? 110 : 90}
+        intensity={quality === "LOW" ? 72 : 58}
         color="#bfe8ef"
         position={[0, 0, 0]}
       />

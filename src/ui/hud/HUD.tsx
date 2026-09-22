@@ -195,7 +195,7 @@ export function HUD({ onPause }: { onPause: () => void }) {
       {/* top bar */}
       <div className="absolute left-0 right-0 top-0 flex items-start justify-between px-5 pt-[max(env(safe-area-inset-top),14px)] sm:px-8">
         <div className="w-fit rounded-sm border border-cyan-300/15 bg-black/45 px-3 py-2 backdrop-blur-sm">
-          <div className="font-mono text-[10px] tracking-[0.3em] text-cyan-200/80">{MISSION_UI[mission].title}</div>
+          <div className="hidden font-mono text-[10px] tracking-[0.3em] text-cyan-200/80 sm:block">{MISSION_UI[mission].title}</div>
           <div className="flex items-center gap-2.5 font-mono text-xs text-white/70 sm:gap-3">
             <span className="tabular-nums" title="Mission time">T+{fmtTime(missionTime)}</span>
             <span className="text-cyan-300/60">|</span>

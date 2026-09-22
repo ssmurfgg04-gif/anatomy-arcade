@@ -95,11 +95,15 @@ export function SharedCells({
       const r = rng();
       const kind: 0 | 1 | 2 = r < 0.08 ? 1 : !lowTier && r < 0.08 + bigRatio ? 2 : 0;
       arr.push({
-        t: 0.06 + rng() * 0.94,
+        // 0.06 head start keeps the spawn corridor clear; 0.86 cap keeps the
+        // stabilize zone + payoff view calm (VLM round 2)
+        t: 0.06 + rng() * 0.8,
         angle: rng() * Math.PI * 2,
         dist: 0.15 + rng() * 0.68,
         speed: 0.8 + rng() * 0.5,
-        scale: kind === 2 ? 1.55 + rng() * 0.35 : 0.55 + rng() * 0.95,
+        // size variety with a ceiling: RBCs 0.5-1.3, big cells 1.55-1.9 — the
+        // size-difference lesson stays, but no screen-filling blobs
+        scale: kind === 2 ? 1.55 + rng() * 0.35 : 0.5 + rng() * 0.8,
         wobblePhase: rng() * Math.PI * 2,
         spinSpeed: (rng() < 0.5 ? -1 : 1) * (0.6 + rng() * 1.8),
         kind,
@@ -158,7 +162,9 @@ export function SharedCells({
       const turb = turbulence(s.t, flow);
       const localSpeed = baseSpeed * s.speed * (1 - 0.85 * turb) * (1 + 0.2 * Math.sin(time * 2 + s.wobblePhase));
       s.t += localSpeed * dtc;
-      if (s.t > 1) s.t -= 1;
+      // recycle BEFORE the payoff corridor: cells never enter the stabilize /
+      // cavern view (a seed-time cap cannot hold — flow carries them through)
+      if (s.t > 0.86) s.t = 0.06 + (s.t - 0.86);
 
       const wobbleAmp = 0.05 + turb * 0.5;
       const angle = s.angle + Math.sin(time * (1.2 + turb * 3) + s.wobblePhase) * wobbleAmp;
@@ -170,21 +176,26 @@ export function SharedCells({
       _spin.setFromAxisAngle(_upAxis, time * s.spinSpeed);
       _q.multiply(_spin);
 
+      _scale.setScalar(s.scale * (s.kind === 1 ? 0.38 : 1));
+
       if (playerPos) {
         const dx = _pos.x - playerPos.x;
         const dy = _pos.y - playerPos.y;
         const dz = _pos.z - playerPos.z;
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < 0.42 && d2 > 1e-6) {
+        // near-camera smooth shrink: cells dissolve as they reach the rig
+        // instead of filling the screen (VLM round 2 — screen-filling blobs)
+        if (d2 < 0.9 && d2 > 1e-6) {
           const d = Math.sqrt(d2);
-          const f = ((0.65 - d) / 0.65) * 0.5;
+          const near = THREE.MathUtils.clamp((d - 0.3) / 0.65, 0, 1);
+          const f = ((0.65 - d) / 0.65) * 0.5 * near;
           _pos.x += (dx / d) * f;
           _pos.y += (dy / d) * f;
           _pos.z += (dz / d) * f;
+          _scale.multiplyScalar(0.15 + 0.85 * near);
         }
       }
 
-      _scale.setScalar(s.scale * (s.kind === 1 ? 0.38 : 1));
       _mtx.compose(_pos, _q, _scale);
       if (s.kind === 2) {
         bigRef.current?.setMatrixAt(bigIdx++, _mtx);

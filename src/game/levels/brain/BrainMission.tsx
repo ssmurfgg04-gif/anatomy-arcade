@@ -811,7 +811,7 @@ function SynapseCavern({ flowRef, quality }: { flowRef: React.MutableRefObject<n
       {/* soma */}
       <mesh>
         <sphereGeometry args={[3.2, quality === "LOW" ? 14 : 24, quality === "LOW" ? 12 : 20]} />
-        <meshStandardMaterial color="#4a3a80" emissive="#2a1a55" emissiveIntensity={0.5} roughness={0.4} metalness={0.05} />
+        <meshStandardMaterial color="#4a3a80" emissive="#2a1a55" emissiveIntensity={0.85} roughness={0.4} metalness={0.05} />
       </mesh>
       {/* nucleus */}
       <mesh ref={nucleusRef}>
@@ -820,7 +820,7 @@ function SynapseCavern({ flowRef, quality }: { flowRef: React.MutableRefObject<n
       </mesh>
       {dendrites.map((g, i) => (
         <mesh key={i} geometry={g}>
-          <meshStandardMaterial color="#41307a" emissive="#221848" emissiveIntensity={0.5} roughness={0.5} />
+          <meshStandardMaterial color="#41307a" emissive="#2c2070" emissiveIntensity={0.95} roughness={0.5} />
         </mesh>
       ))}
       {/* expanding signal ring — fires when the pathway is perfused */}
@@ -829,6 +829,7 @@ function SynapseCavern({ flowRef, quality }: { flowRef: React.MutableRefObject<n
         <meshBasicMaterial color="#7ee0f0" transparent opacity={0.3} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
       <pointLight ref={glowRef} intensity={1.4} distance={34} color="#9a7ef0" position={[0, 1, 3]} />
+      <pointLight intensity={1.1} distance={26} color="#5a4ab0" position={[0, -2, -4]} />
     </group>
   );
 }

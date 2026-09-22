@@ -41,10 +41,10 @@ export const HEART_TUBE_THEME: TubeTheme = {
 };
 
 export const VIRAL_TUBE_THEME: TubeTheme = {
-  healthy: [0.4, 0.175, 0.15],
-  damaged: [0.52, 0.16, 0.115],
-  veinLow: [0.62, 0.28, 0.24],
-  veinHigh: [0.85, 0.5, 0.42],
+  healthy: [0.32, 0.14, 0.12],
+  damaged: [0.44, 0.13, 0.1],
+  veinLow: [0.56, 0.24, 0.2],
+  veinHigh: [0.78, 0.44, 0.36],
   fresnel: [0.3, 0.36, 0.42],
   warn: [0.55, 0.1, 0.05],
   veinFreq: 64,

@@ -41,7 +41,23 @@ ACTION TAKEN:
 RESULT: fixes applied post-critique; full E2E re-run green (see worklog P7 entry); visual delta verified in round 2 shots.
 
 ## ROUND 2 — VISUAL QUALITY
-(pending)
+DATE: 2026-09-22
+SCREENSHOTS REVIEWED: 16 (scripts/aa_vlm_r2/shots r2_01..r2_16) — full build post-round-1 fixes incl. the two new missions + BioDex v2; 12 VLM critiques in scripts/aa_vlm_r2/v2_*.json. Scores 3–7.5/10 (SwiftShader LOW-tier renders; harshness expected).
+CRITIQUE (real signal extracted, artifact noise filtered):
+1. MOBILE WHITEOUT (critical, real bug): player spotlight (110/90) blew out the brighter coral airway wall to pure white on mobile close-ups.
+2. Screen-filling near-camera cells across ALL missions incl. heart (regression NOT — long-standing; round-1 shot identical; flow carries cells into payoff views regardless of seed caps).
+3. "Black void" background — fog color ≠ canvas clear color, so distance reads as empty space instead of medium.
+4. TRAINING card still visible at scanner stage (escape hatch fired at objective ≥5; shot at 4; no hard timeout).
+5. Mobile: vitals panel title row ate horizontal space.
+6. Brain cavern too dark; objective current-vs-next hierarchy still close (partial).
+ACTION TAKEN:
+- Spotlight intensity 110/90 → 72/58 in BOTH players; viral wall albedo darkened ~20% (headroom under ACES).
+- Cell law rework (SharedCells + heart BloodCells): RBC size ceiling 0.5–1.25/1.3 (WBC keeps 1.55–1.9), near-camera smooth shrink (cells dissolve inside 0.95 u), and a FLOW-RECYCLE law — cells wrap at t=0.86 so the stabilize zone + payoff corridor stay permanently clear (seed-time caps cannot hold; flow passes through).
+- Per-mission canvas background = fog color (heart #160409 / viral #1c0f14 / brain #0a0a18) — no more void.
+- Tutorial: escape hatch lowered to objective ≥4 + 22 s hard timeout.
+- Mobile vitals: mission-title row hidden on <sm.
+- Brain cavern brightened (soma/dendrite emissive + fill light).
+RESULT: reshoots verify — mobile whiteout eliminated, hero-heart + neuron cavern payoffs read cleanly, void replaced by immersive medium. Final full E2E suites (aa_p6 + aa_p7) re-run after these changes.
 
 ## ROUND 3 — GAME FEEL
 (pending)

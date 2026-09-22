@@ -71,14 +71,16 @@ export function BloodCells({
     for (let i = 0; i < countRef.current; i++) {
       const isPlatelet = rng() < 0.08;
       const isWBC = !isPlatelet && !lowTier && rng() < 0.022;
-      // keep the spawn corridor (t < 0.06) clear so the first view is open vessel
+      // keep the spawn corridor (t < 0.06) clear so the first view is open vessel;
+      // cap t at 0.86 so the stabilize zone + hero-heart payoff stay calm (VLM r2)
       arr.push({
-        t: 0.06 + rng() * 0.94,
+        t: 0.06 + rng() * 0.8,
         angle: rng() * Math.PI * 2,
         dist: 0.15 + rng() * 0.68,
         speed: 0.8 + rng() * 0.5,
         // true size variety (spec: cells differ in SIZE): RBC ≈ 7.5µm, WBC ≈ 13µm
-        scale: isWBC ? 1.55 + rng() * 0.35 : 0.55 + rng() * 0.95,
+        // ceiling 1.25 keeps close RBCs from filling the screen (VLM round 2)
+        scale: isWBC ? 1.55 + rng() * 0.35 : 0.5 + rng() * 0.75,
         tumble: new THREE.Euler(rng() * 6.3, rng() * 6.3, rng() * 6.3),
         isPlatelet,
         isWBC,
@@ -142,7 +144,9 @@ export function BloodCells({
       const turb = turbulenceAt(s.t, flow);
       const localSpeed = baseSpeed * s.speed * (1 - 0.85 * turb) * (1 + 0.2 * Math.sin(time * 2 + s.wobblePhase));
       s.t += localSpeed * dtc;
-      if (s.t > 1) s.t -= 1;
+      // recycle before the stabilize zone: the hero-heart payoff corridor
+      // stays permanently clear (seed-time caps cannot hold — flow passes through)
+      if (s.t > 0.86) s.t = 0.06 + (s.t - 0.86);
 
       // wobble: strong where turbulent (before treatment), gentle when healthy
       const wobbleAmp = 0.05 + turb * 0.5;
@@ -156,22 +160,26 @@ export function BloodCells({
       _spin.setFromAxisAngle(_upAxis, time * s.spinSpeed);
       _q.multiply(_spin);
 
-      // player wake (L25 SDF wake): cells part and swirl around the robot
+      _scale.setScalar(s.scale * (s.isPlatelet ? 0.38 : 1));
+
+      // near-camera smooth shrink (VLM round 2): cells dissolve as they reach
+      // the rig instead of filling the screen
       if (playerPos) {
         const dx = _pos.x - playerPos.x;
         const dy = _pos.y - playerPos.y;
         const dz = _pos.z - playerPos.z;
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < 0.42 && d2 > 1e-6) {
+        if (d2 < 0.9 && d2 > 1e-6) {
           const d = Math.sqrt(d2);
-          const f = ((0.65 - d) / 0.65) * 0.5;
+          const near = THREE.MathUtils.clamp((d - 0.3) / 0.65, 0, 1);
+          const f = ((0.65 - d) / 0.65) * 0.5 * near;
           _pos.x += (dx / d) * f;
           _pos.y += (dy / d) * f;
           _pos.z += (dz / d) * f;
+          _scale.multiplyScalar(0.15 + 0.85 * near);
         }
       }
 
-      _scale.setScalar(s.scale * (s.isPlatelet ? 0.38 : 1));
       _mtx.compose(_pos, _q, _scale);
       if (s.isWBC) {
         wbcRef.current?.setMatrixAt(wbcIdx++, _mtx);
