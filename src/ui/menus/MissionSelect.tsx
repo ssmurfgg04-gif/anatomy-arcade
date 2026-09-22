@@ -14,8 +14,8 @@ const MISSIONS: {
   accent: string;
 }[] = [
   { id: "heart", num: "01", name: "HEART ATTACK RESPONSE", desc: "Coronary vessel. Locate the obstruction. Restore the flow.", status: "READY", accent: "#C21E3A" },
-  { id: "viral", num: "02", name: "VIRAL INVASION", desc: "Alveolar region. Identify infected cells. Assist immunity.", status: "SOON", accent: "#2DD9E8" },
-  { id: "brain", num: "03", name: "BRAIN MISSION", desc: "Neural network. Reconnect pathways. Restore the signal.", status: "SOON", accent: "#8f6fd8" },
+  { id: "viral", num: "02", name: "VIRAL INVASION", desc: "Bronchioles to the acinus. Neutralize the colonies. Restore O₂ exchange.", status: "READY", accent: "#2DD9E8" },
+  { id: "brain", num: "03", name: "BRAIN MISSION", desc: "Cerebral vessel. Reinforce the aneurysm. Restore the signal.", status: "READY", accent: "#8f6fd8" },
 ];
 
 export function MissionSelect() {
@@ -24,15 +24,15 @@ export function MissionSelect() {
   const setUiOverlay = useGame((s) => s.setUiOverlay);
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col overflow-y-auto bg-gradient-to-b from-[#04070c]/80 via-[#060a12]/60 to-[#04070c]/90 px-6 py-[max(env(safe-area-inset-top),5vh)] sm:px-12">
+    <div className="fixed inset-0 z-30 flex flex-col justify-center overflow-y-auto bg-gradient-to-b from-[#04070c]/80 via-[#060a12]/60 to-[#04070c]/90 px-6 py-[max(env(safe-area-inset-top),5vh)] sm:px-12">
       <div className="mx-auto w-full max-w-3xl">
         <button
-          className="mb-8 font-mono text-[10px] tracking-[0.35em] text-white/50 transition hover:text-cyan-200"
+          className="mb-6 font-mono text-[10px] tracking-[0.35em] text-white/50 transition hover:text-cyan-200"
           onClick={() => setPhase("MAIN_MENU")}
         >
           &larr; BACK
         </button>
-        <h2 className="font-mono text-xs tracking-[0.45em] text-cyan-200/80">SELECT MISSION</h2>
+        <h2 className="font-mono text-sm font-semibold tracking-[0.45em] text-cyan-100">SELECT MISSION</h2>
         <div className="mt-6 flex flex-col gap-4">
           {MISSIONS.map((m) => (
             <button
@@ -50,8 +50,8 @@ export function MissionSelect() {
                 {m.num}
               </span>
               <span className="flex flex-1 flex-col justify-center gap-1 py-5 pr-5">
-                <span className="font-mono text-sm font-semibold tracking-[0.18em] text-white">{m.name}</span>
-                <span className="text-xs text-white/55">{m.desc}</span>
+                <span className="font-mono text-[15px] font-bold tracking-[0.18em] text-white">{m.name}</span>
+                <span className="text-xs leading-relaxed text-white/60">{m.desc}</span>
               </span>
               <span className="flex items-center pr-5 font-mono text-[9px] tracking-[0.3em]" style={{ color: m.status === "READY" ? "#2DD9E8" : "rgba(255,255,255,0.35)" }}>
                 {m.status === "READY" ? "▸ READY" : "COMING SOON"}
@@ -59,19 +59,7 @@ export function MissionSelect() {
             </button>
           ))}
         </div>
-        <div className="mt-10 grid gap-3 border-t border-white/10 pt-6 sm:grid-cols-3">
-          {[
-            ["MOVE", "WASD / Left stick"],
-            ["SCAN", "Q / SCAN button"],
-            ["TREAT", "E / ACT button"],
-          ].map(([k, v]) => (
-            <div key={k}>
-              <div className="font-mono text-[9px] tracking-[0.35em] text-cyan-200/70">{k}</div>
-              <div className="mt-1 font-mono text-[11px] text-white/60">{v}</div>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-5 pb-8 pt-5 font-mono text-[10px] tracking-[0.3em] text-white/45">
+        <div className="flex flex-wrap gap-5 border-t border-white/10 pb-8 pt-5 font-mono text-[10px] tracking-[0.3em] text-white/45">
           <button className="transition hover:text-cyan-200" onClick={() => setUiOverlay("HOW_TO_PLAY")}>
             FULL CONTROLS
           </button>

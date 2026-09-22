@@ -4,6 +4,7 @@
  * the 3D world stays imperative (refs) — no per-frame React rerenders.
  * Research law L5/L6/L16: adaptive quality governor drives render scale +
  * tier hysteresis; pause suspends the sim via the shared input flag.
+ * P7: mounts the active mission (heart | viral | brain) — one world at a time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -14,12 +15,14 @@ import { QualityGovernor } from "@/game/quality/governor";
 import { createInputState, clearHeldInput, useKeyboardInput, usePointerLook, type InputState } from "@/game/controls/input";
 import { TouchControls } from "@/game/controls/TouchControls";
 import { TutorialOverlay } from "@/ui/tutorial/TutorialOverlay";
-import { createHeartRefs, HeartMission, type HeartRefs } from "@/game/levels/heart/HeartMission";
+import { createHeartRefs, HeartMission } from "@/game/levels/heart/HeartMission";
+import { createViralRefs, ViralMission } from "@/game/levels/viral/ViralMission";
+import { createBrainRefs, BrainMission } from "@/game/levels/brain/BrainMission";
 import { updateHum, startHum, playImpact, playHeartbeat, startAmbience, setAudioVolume } from "@/audio/sfx";
 
 const TIER_ORDER: QualityTier[] = ["LOW", "MEDIUM", "HIGH"];
 
-function BeatDriver({ refs }: { refs: HeartRefs }) {
+function BeatDriver({ refs }: { refs: { beat: React.MutableRefObject<number>; flow: React.MutableRefObject<number>; hitWall: React.MutableRefObject<number>; player: { speed: number; boosting: boolean; shake: number } } }) {
   const { camera } = useThree();
   const lastBeat = useRef(0);
   useFrame((state) => {
@@ -56,7 +59,9 @@ function GovernorDriver({
 }) {
   const applied = useRef(1);
   const onScaleRef = useRef(onScale);
-  onScaleRef.current = onScale;
+  useEffect(() => {
+    onScaleRef.current = onScale;
+  }, [onScale]);
   useFrame((_, delta) => {
     governor.update(delta * 1000);
     const s = governor.renderScale;
@@ -73,6 +78,7 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
   const qualityResolvedStore = useGame((s) => s.qualityResolved);
   const setQualityResolved = useGame((s) => s.setQualityResolved);
   const audioMaster = useGame((s) => s.settings.audioMaster);
+  const mission = useGame((s) => s.mission);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
 
   const [tier, setTier] = useState<QualityTier>("MEDIUM");
@@ -108,11 +114,23 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
 
   const input = useMemo(() => ({ current: createInputState() }), []);
   const [heartRefs] = useState(() => createHeartRefs(QUALITY_PROFILES[tier].particleCount));
+  const [viralRefs] = useState(() => createViralRefs(QUALITY_PROFILES[tier].particleCount));
+  const [brainRefs] = useState(() => createBrainRefs(QUALITY_PROFILES[tier].particleCount));
 
   // keep live particle budget synced to the active tier (L6: particles = big dial)
   useEffect(() => {
-    heartRefs.particleCount.current = QUALITY_PROFILES[tier].particleCount;
-  }, [tier, heartRefs]);
+    const count = QUALITY_PROFILES[tier].particleCount;
+    heartRefs.particleCount.current = count;
+    viralRefs.particleCount.current = count;
+    brainRefs.particleCount.current = count;
+  }, [tier, heartRefs, viralRefs, brainRefs]);
+
+  // expose the ACTIVE mission's refs to probes/HUD (same window contract)
+  const activeRefs = mission === "viral" ? viralRefs : mission === "brain" ? brainRefs : heartRefs;
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__aaRefs = activeRefs;
+    (window as unknown as Record<string, unknown>).__aaInput = input;
+  }, [activeRefs, input]);
 
   // pause suspension (L16): freeze movement + mission sim, kill held inputs
   const handlePause = useCallback(() => {
@@ -132,11 +150,6 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
       input.current.suspended = false;
     };
   }, [input]);
-
-  useEffect(() => {
-    (window as unknown as Record<string, unknown>).__aaRefs = heartRefs;
-    (window as unknown as Record<string, unknown>).__aaInput = input;
-  }, [heartRefs, input]);
 
   useKeyboardInput(input);
   usePointerLook(input, true);
@@ -202,8 +215,10 @@ export function GameCanvas({ onOpenPause }: { onOpenPause: () => void }) {
       >
         <color attach="background" args={["#05080e"]} />
         <fog attach="fog" args={["#0b0507", 12, 72]} />
-        <HeartMission refs={heartRefs} input={input} quality={tier} />
-        <BeatDriver refs={heartRefs} />
+        {mission === "heart" && <HeartMission key="heart" refs={heartRefs} input={input} quality={tier} />}
+        {mission === "viral" && <ViralMission key="viral" refs={viralRefs} input={input} quality={tier} />}
+        {mission === "brain" && <BrainMission key="brain" refs={brainRefs} input={input} quality={tier} />}
+        <BeatDriver refs={activeRefs} />
         <GovernorDriver governor={governor} onScale={onScale} />
       </Canvas>
       <TouchControls input={input} onPause={handlePause} />

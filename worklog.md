@@ -218,3 +218,25 @@ Stage Summary:
 - 10-stage heart mission complete and E2E-green (20/20); hero real-anatomy heart integrated with clean CC BY 4.0 attribution; living-bloodstream upgrades tier-gated for mobile.
 - Artifacts: public/models/{heart_hero,coronary_artery,body_silhouette}.glb, Junction.tsx, probe scripts, updated ASSETS.md/CONTEXT.md.
 - Next: VLM critique round 1 on this build, P6 journal polish, P7 missions reuse the 10-stage template.
+
+---
+Task ID: 4
+Agent: main
+Task: P7 — clone the 10-stage template into Viral Invasion + Brain Mission; VLM critique round 1 + fixes; BioDex body-mesh wiring; finish all pending todos.
+
+Work Log:
+- VLM ROUND 1 (structure): captured 17 fresh screenshots (desktop 1440x900 + mobile 390x844, scripts/aa_vlm_r1/shots) of the current build; ran z-ai vision aggressive critiques per shot (scripts/aa_vlm_r1/*.json); synthesized 8 cross-cutting findings into docs/VLM-CRITIQUE.md.
+- Applied round-1 fix wave: HUD objective panel redesigned (current stage hero + collapsed completed + next dimmed), action hint pill anchored below reticle (was bottom-of-screen blocker), vitals wrapped in panel; TutorialOverlay auto-completes at objective >=5 (late-mission training card bug) + HeartRefs import decoupled to structural type; EducationPanel (+DISCOVERED to header, RESUME right-aligned under divider, solid bg, max-w-xl); MissionSelect (controls legend removed, titles 15px bold, vertical centering); Briefing (max-w-2xl, corner-bracket nano-frame, THREAT red / OBJECTIVE amber); HeroHeart cyan rim light behind organ; landing H1 clamp reduced + dual text-shadow.
+- P7 missions built on a NEW shared parameterized engine (src/game/levels/shared/: world.ts tube factory + aim-assist scan resolver, SharedTube with per-mission shader palettes, SharedCells, SharedPlayer, SharedJunction/SharedBeacon) — heart slice files untouched except additive rim light + aim assist.
+- VIRAL INVASION (levels/viral/): airway.ts (bronchiole spline, inflammatory radius zones, LLL dead-end spur), ViralMission.tsx full 10-stage arc (breath driver, viral colonies treat targets, dust motes, macrophage big cells, AlveolarSac payoff with O2 glow ramp + capillary RBC ring).
+- BRAIN MISSION (levels/brain/): pathway.ts (cerebral artery, aneurysm BULGE zone (radius >1), ACA spur), BrainMission.tsx 10-stage arc (theta-rhythm driver, NeuralWeb axon strands with flow-driven signal pulses, WeakWall reinforcement targets, SynapseCavern payoff with signal ring).
+- state.ts: all three missions on the shared 10-stage arc (same indices -> page.tsx scan handling + failProgress mission-agnostic); OBJECTIVE_WHY per-mission keys + objectiveWhy(); MISSION_UI (titles, payoffs, branch warnings, per-mission action hints); MISSION_ANALYSIS_IDS + ANALYSIS_TITLES.
+- GameCanvas mounts active mission by key (heart|viral|brain) with per-mission refs; __aaRefs contract preserved. page.tsx scan handler generalized via MISSION_ANALYSIS_IDS/ANALYSIS_TITLES. Screens.tsx per-mission results titles + payoff + richer lessons. HUD via MISSION_UI. MissionSelect: all three READY. anatomy.ts +8 entries (airwayWall, macrophage, infectedCell, alveolarSac, aneurysm, weakWall, axon, synapse).
+- NEW ASSET-free art: alveolar sac + neuron soma + neural web all procedural (no license load).
+- BUG FOUND+FIXED: scan flakiness (E2E stage-7 intermittent; drift moves the rig ~4deg after aim vs 2.6deg marker) -> resolveScanTarget: exact ray then 20deg aim-assist cone; marker size 0.13->0.18. Applied to all three missions. Also fixed GameCanvas ref-during-render lint error (onScaleRef via useEffect).
+- E2E scripts/aa_p7_missions.py: full 10-stage arc for BOTH new missions + mobile ticker/scan button checks. Run 1: viral 16/16 PASS, brain blocked by HMR mid-run (WebGL context lost from concurrent file edits — environmental). Fixes applied, reruns clean.
+
+Stage Summary:
+- All three missions playable on the same 10-stage arc; heart mission untouched (priority law held).
+- VLM round 1 logged + fixed; rounds 2-5 pending.
+- Next: E2E run 3 green check, BioDex body-mesh wiring (subagent), P6 journal polish, VLM round 2, GitHub push.

@@ -64,12 +64,15 @@ export function Hero() {
             THE HUMAN BODY. YOUR MISSION.
           </p>
 
-          <h1 className="mt-5 font-sans text-[clamp(3.1rem,11.5vw,7.5rem)] font-black italic leading-[0.93] tracking-[-0.035em] text-white">
+          <h1
+            className="mt-5 font-sans text-[clamp(2.5rem,9.2vw,6.2rem)] font-black italic leading-[0.94] tracking-[-0.035em] text-white"
+            style={{ textShadow: "0 4px 24px rgba(0,0,0,0.85)" }}
+          >
             ANATOMY
             <br />
             <span
               className="text-[#2DD9E8]"
-              style={{ textShadow: "0 0 34px rgba(45,217,232,0.4)" }}
+              style={{ textShadow: "0 0 34px rgba(45,217,232,0.4), 0 4px 18px rgba(0,0,0,0.9)" }}
             >
               ARCADE
             </span>

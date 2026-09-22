@@ -115,24 +115,135 @@ interface GameState {
   completeObjectiveSilent: (index: number) => void;
 }
 
-/** Human-facing situation line under each objective (the WHY, spec §45). */
+/**
+ * Human-facing situation line under each objective (the WHY, spec §45).
+ * Keyed by `${mission}:${objectiveId}` with a shared `${id}` fallback.
+ */
 export const OBJECTIVE_WHY: Record<string, string> = {
+  // ---- shared defaults ----
   brief: "Know the patient, the threat and your tools before the clock starts.",
-  enter: "The nano-robot has been injected into the coronary artery.",
-  navigate: "Follow the flow — healthy channels carry cells at speed.",
-  identify: "Coronary arteries feed the heart muscle itself. The LAD runs down the front wall.",
-  scan: "Identify the obstruction before attempting treatment.",
-  locate: "The beacon marks where the flow signal goes dark.",
+  scan: "Identify the threat before attempting treatment.",
   analyze: "A scanner readout tells you what you are dealing with — and how bad it is.",
-  clear: "The clot is starving heart muscle of oxygen. Dissolve it.",
-  restore: "Blood must reach the tissue downstream of the clot.",
-  stabilize: "Hold position while the heart rhythm normalizes.",
+  stabilize: "Hold position while the patient's vitals normalize.",
+  // ---- heart ----
+  "heart:enter": "The nano-robot has been injected into the coronary artery.",
+  "heart:navigate": "Follow the flow — healthy channels carry cells at speed.",
+  "heart:identify": "Coronary arteries feed the heart muscle itself. The LAD runs down the front wall.",
+  "heart:locate": "The beacon marks where the flow signal goes dark.",
+  "heart:clear": "The clot is starving heart muscle of oxygen. Dissolve it.",
+  "heart:restore": "Blood must reach the tissue downstream of the clot.",
+  "heart:stabilize": "Hold position while the heart rhythm normalizes.",
+  // ---- viral ----
+  "viral:enter": "The nano-robot rides the airflow in through the trachea.",
+  "viral:navigate": "Airways branch sixteen times before the alveoli — follow the flow of air.",
+  "viral:identify": "The acinus is the gas-exchange cluster at the end of a bronchiole. Infections hide here.",
+  "viral:locate": "Infected cells glow irregularly — the beacon marks the cluster.",
+  "viral:clear": "Neutralize the viral colonies so the immune system can finish the job.",
+  "viral:restore": "Oxygen must cross the alveolar wall into the blood again.",
+  "viral:stabilize": "Hold position while oxygen saturation recovers.",
+  // ---- brain ----
+  "brain:enter": "The nano-robot has been injected into the cerebral circulation.",
+  "brain:navigate": "Follow the vessel as it branches through the neural web.",
+  "brain:identify": "The MCA feeds the lateral brain — most strokes happen right here.",
+  "brain:locate": "The beacon marks where the vessel wall balloons outward.",
+  "brain:clear": "Reinforce the weakened wall before it ruptures — stroke prevention in real time.",
+  "brain:restore": "Neurons downstream need perfusion to fire again.",
+  "brain:stabilize": "Hold position while neural activity normalizes.",
+};
+
+/** WHY-line for an objective in a mission (mission key first, shared id fallback). */
+export const objectiveWhy = (mission: MissionId, id: string): string | undefined =>
+  OBJECTIVE_WHY[`${mission}:${id}`] ?? OBJECTIVE_WHY[id];
+
+/**
+ * Per-mission HUD/briefing chrome (title strip, branch-warning copy,
+ * contextual action hints, completion payoff). Keeps the heart slice untouched
+ * while missions 02/03 clone the 10-stage arc.
+ */
+export interface MissionUI {
+  title: string;
+  payoff: string;
+  branchWarn: { title: string; body: string };
+  hints: Record<string, { desktop: string; mobile: string }>;
+}
+
+export const MISSION_UI: Record<MissionId, MissionUI> = {
+  heart: {
+    title: "HEART RESPONSE",
+    payoff: "FLOW RESTORED",
+    branchWarn: {
+      title: "LCX — LEFT CIRCUMFLEX",
+      body: "THIS VESSEL IS CLEAR. THE BLOCKAGE IS IN THE LAD — TURN BACK.",
+    },
+    hints: {
+      navigate: { desktop: "FOLLOW THE FLOW — REACH THE CYAN BEACON", mobile: "FOLLOW THE FLOW — REACH THE CYAN BEACON" },
+      identify: { desktop: "BRANCH AHEAD — TAKE THE LAD CHANNEL", mobile: "BRANCH AHEAD — TAKE THE LAD CHANNEL" },
+      scan: { desktop: "AIM AT A GLOWING MARKER — PRESS [Q] TO SCAN", mobile: "AIM AT A GLOWING MARKER — TAP SCAN" },
+      locate: { desktop: "THE PLAQUE ZONE IS AHEAD — FOLLOW THE AMBER BEACON", mobile: "THE PLAQUE ZONE IS AHEAD — FOLLOW THE AMBER BEACON" },
+      analyze: { desktop: "AIM AT THE CLOT — PRESS [Q] TO ANALYZE", mobile: "AIM AT THE CLOT — TAP SCAN TO ANALYZE" },
+      clear: { desktop: "HOLD [E] ON THE CLOT TO DISSOLVE IT", mobile: "HOLD TREAT ON THE CLOT TO DISSOLVE IT" },
+      stabilize: { desktop: "HOLD POSITION INSIDE THE CYAN RING", mobile: "HOLD POSITION INSIDE THE CYAN RING" },
+    },
+  },
+  viral: {
+    title: "VIRAL RESPONSE",
+    payoff: "OXYGEN RESTORED",
+    branchWarn: {
+      title: "LEFT BRONCHIAL TREE",
+      body: "THIS BRANCH IS HEALTHY. THE INFECTION IS IN THE RIGHT LOWER LOBE — TURN BACK.",
+    },
+    hints: {
+      navigate: { desktop: "FOLLOW THE AIRFLOW — REACH THE CYAN BEACON", mobile: "FOLLOW THE AIRFLOW — REACH THE CYAN BEACON" },
+      identify: { desktop: "BRANCH AHEAD — TAKE THE ACINUS CHANNEL", mobile: "BRANCH AHEAD — TAKE THE ACINUS CHANNEL" },
+      scan: { desktop: "AIM AT A GLOWING MARKER — PRESS [Q] TO SCAN", mobile: "AIM AT A GLOWING MARKER — TAP SCAN" },
+      locate: { desktop: "THE INFECTED CLUSTER IS AHEAD — FOLLOW THE AMBER BEACON", mobile: "THE INFECTED CLUSTER IS AHEAD — FOLLOW THE AMBER BEACON" },
+      analyze: { desktop: "AIM AT THE INFECTED CELLS — PRESS [Q] TO ANALYZE", mobile: "AIM AT THE INFECTED CELLS — TAP SCAN TO ANALYZE" },
+      clear: { desktop: "HOLD [E] ON A VIRAL COLONY TO NEUTRALIZE IT", mobile: "HOLD TREAT ON A VIRAL COLONY TO NEUTRALIZE IT" },
+      stabilize: { desktop: "HOLD POSITION INSIDE THE CYAN RING", mobile: "HOLD POSITION INSIDE THE CYAN RING" },
+    },
+  },
+  brain: {
+    title: "STROKE RESPONSE",
+    payoff: "SIGNAL RESTORED",
+    branchWarn: {
+      title: "ACA — ANTERIOR CEREBRAL",
+      body: "THIS BRANCH IS HEALTHY. THE ANEURYSM IS ON THE MCA — TURN BACK.",
+    },
+    hints: {
+      navigate: { desktop: "FOLLOW THE VESSEL — REACH THE CYAN BEACON", mobile: "FOLLOW THE VESSEL — REACH THE CYAN BEACON" },
+      identify: { desktop: "BRANCH AHEAD — TAKE THE MCA CHANNEL", mobile: "BRANCH AHEAD — TAKE THE MCA CHANNEL" },
+      scan: { desktop: "AIM AT A GLOWING MARKER — PRESS [Q] TO SCAN", mobile: "AIM AT A GLOWING MARKER — TAP SCAN" },
+      locate: { desktop: "THE ANEURYSM ZONE IS AHEAD — FOLLOW THE AMBER BEACON", mobile: "THE ANEURYSM ZONE IS AHEAD — FOLLOW THE AMBER BEACON" },
+      analyze: { desktop: "AIM AT THE ANEURYSM — PRESS [Q] TO ANALYZE", mobile: "AIM AT THE ANEURYSM — TAP SCAN TO ANALYZE" },
+      clear: { desktop: "HOLD [E] ON THE WALL TO DEPLOY THE REINFORCEMENT MATRIX", mobile: "HOLD TREAT ON THE WALL TO REINFORCE IT" },
+      stabilize: { desktop: "HOLD POSITION INSIDE THE CYAN RING", mobile: "HOLD POSITION INSIDE THE CYAN RING" },
+    },
+  },
+};
+
+/** Scan ids whose readout is a clinical ANALYSIS (not a discovery card). */
+export const MISSION_ANALYSIS_IDS: Record<MissionId, string[]> = {
+  heart: ["thrombus", "plaque"],
+  viral: ["infectedCell", "virus"],
+  brain: ["aneurysm", "weakWall"],
+};
+
+/** Analysis readout title per scan id (spec §25 stage 07 feedback). */
+export const ANALYSIS_TITLES: Record<string, string> = {
+  thrombus: "ANALYSIS — 92% OCCLUSION (LAD)",
+  plaque: "ANALYSIS — PLAQUE RUPTURE SITE (LAD)",
+  infectedCell: "ANALYSIS — 84% VIRAL LOAD (RIGHT LOWER LOBE)",
+  virus: "ANALYSIS — ACTIVE VIRION SWARM (ACINUS 7)",
+  aneurysm: "ANALYSIS — 6.2MM ANEURYSM (MCA BIFURCATION)",
+  weakWall: "ANALYSIS — VESSEL WALL DEGRADATION (MCA)",
 };
 
 /**
- * Heart mission = the spec §25 ten-stage arc (brief → entry → navigation →
- * branch identification → scanner calibration → plaque → analysis → treatment
- * → reperfusion → stabilization). Each stage is one objective row.
+ * All missions follow the spec §25 ten-stage arc (brief → entry → navigation →
+ * branch identification → scanner calibration → locate → analysis → treatment
+ * → restoration → stabilization). Each stage is one objective row; the stage
+ * INDICES are shared, which keeps page.tsx scan handling and failProgress
+ * mission-agnostic.
  */
 const MISSION_OBJECTIVES: Record<MissionId, { id: string; label: string }[]> = {
   heart: [
@@ -148,18 +259,28 @@ const MISSION_OBJECTIVES: Record<MissionId, { id: string; label: string }[]> = {
     { id: "stabilize", label: "STABILIZE THE HEART" },
   ],
   viral: [
-    { id: "enter", label: "ENTER ALVEOLAR REGION" },
-    { id: "locate", label: "LOCATE INFECTED CELLS" },
-    { id: "scan", label: "SCAN INFECTION SITE" },
-    { id: "clear", label: "ASSIST IMMUNE RESPONSE" },
+    { id: "brief", label: "REVIEW PATIENT VITALS" },
+    { id: "enter", label: "ENTER RESPIRATORY SYSTEM" },
+    { id: "navigate", label: "NAVIGATE THE BRONCHIOLES" },
+    { id: "identify", label: "IDENTIFY THE ACINUS" },
+    { id: "scan", label: "CALIBRATE THE SCANNER" },
+    { id: "locate", label: "LOCATE THE INFECTION" },
+    { id: "analyze", label: "ANALYZE THE VIRAL LOAD" },
+    { id: "clear", label: "NEUTRALIZE THE VIRUS" },
     { id: "restore", label: "RESTORE OXYGEN EXCHANGE" },
+    { id: "stabilize", label: "STABILIZE THE PATIENT" },
   ],
   brain: [
-    { id: "enter", label: "ENTER NEURAL NETWORK" },
-    { id: "locate", label: "LOCATE DAMAGED PATHWAY" },
-    { id: "scan", label: "SCAN NEURON JUNCTION" },
-    { id: "clear", label: "RECONNECT PATHWAY" },
+    { id: "brief", label: "REVIEW PATIENT VITALS" },
+    { id: "enter", label: "ENTER NEURAL PATHWAY" },
+    { id: "navigate", label: "NAVIGATE THE NEURAL NETWORK" },
+    { id: "identify", label: "IDENTIFY THE ARTERY BRANCH" },
+    { id: "scan", label: "CALIBRATE THE SCANNER" },
+    { id: "locate", label: "LOCATE THE ANEURYSM" },
+    { id: "analyze", label: "ANALYZE THE RUPTURE RISK" },
+    { id: "clear", label: "REINFORCE THE VESSEL WALL" },
     { id: "restore", label: "RESTORE SIGNAL FLOW" },
+    { id: "stabilize", label: "STABILIZE NEURAL ACTIVITY" },
   ],
 };
 

@@ -6,9 +6,8 @@
  * toast, micro-facts, damage + heartbeat vignettes.
  */
 import { useEffect, useRef, useState } from "react";
-import { useGame } from "@/game/core/state";
+import { useGame, MISSION_UI } from "@/game/core/state";
 import { ANATOMY, MICRO_FACTS } from "@/game/data/anatomy";
-import type { HeartRefs } from "@/game/levels/heart/HeartMission";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 function fmtTime(s: number) {
@@ -36,7 +35,7 @@ function useTargetDist(active: boolean) {
   useEffect(() => {
     if (!active) return;
     const id = setInterval(() => {
-      const refs = (window as unknown as { __aaRefs?: { current: HeartRefs } }).__aaRefs?.current;
+      const refs = (window as unknown as { __aaRefs?: { current: { targetDist: { current: number } } } }).__aaRefs?.current;
       if (refs) setDist(refs.targetDist.current);
     }, 240);
     return () => clearInterval(id);
@@ -77,6 +76,7 @@ function MicroFact({ quiet }: { quiet: boolean }) {
 
 export function HUD({ onPause }: { onPause: () => void }) {
   const phase = useGame((s) => s.phase);
+  const mission = useGame((s) => s.mission);
   const missionTime = useGame((s) => s.missionTime);
   const patientStatus = useGame((s) => s.patientStatus);
   const playerHealth = useGame((s) => s.playerHealth);
@@ -177,18 +177,10 @@ export function HUD({ onPause }: { onPause: () => void }) {
 
   // contextual action hint: the exact input needed for the current objective
   // (desktop shows the key, mobile names the button — spec §35)
+  const ui = MISSION_UI[mission];
   let actionHint: string | null = null;
-  if (cur) {
-    if (cur.id === "navigate") actionHint = "FOLLOW THE FLOW — REACH THE CYAN BEACON";
-    else if (cur.id === "identify") actionHint = "BRANCH AHEAD — TAKE THE LAD CHANNEL";
-    else if (cur.id === "scan")
-      actionHint = isMobile ? "AIM AT A GLOWING MARKER — TAP SCAN" : "AIM AT A GLOWING MARKER — PRESS [Q] TO SCAN";
-    else if (cur.id === "locate") actionHint = "THE PLAQUE ZONE IS AHEAD — FOLLOW THE AMBER BEACON";
-    else if (cur.id === "analyze")
-      actionHint = isMobile ? "AIM AT THE CLOT — TAP SCAN TO ANALYZE" : "AIM AT THE CLOT — PRESS [Q] TO ANALYZE";
-    else if (cur.id === "clear")
-      actionHint = isMobile ? "HOLD TREAT ON THE CLOT TO DISSOLVE IT" : "HOLD [E] ON THE CLOT TO DISSOLVE IT";
-    else if (cur.id === "stabilize") actionHint = "HOLD POSITION INSIDE THE CYAN RING";
+  if (cur && ui.hints[cur.id]) {
+    actionHint = isMobile ? ui.hints[cur.id].mobile : ui.hints[cur.id].desktop;
   }
 
   // micro-facts are for traversal moments only — never mid-combat
@@ -202,8 +194,8 @@ export function HUD({ onPause }: { onPause: () => void }) {
 
       {/* top bar */}
       <div className="absolute left-0 right-0 top-0 flex items-start justify-between px-5 pt-[max(env(safe-area-inset-top),14px)] sm:px-8">
-        <div className="flex flex-col gap-1">
-          <div className="font-mono text-[10px] tracking-[0.3em] text-cyan-200/80">HEART RESPONSE</div>
+        <div className="w-fit rounded-sm border border-cyan-300/15 bg-black/45 px-3 py-2 backdrop-blur-sm">
+          <div className="font-mono text-[10px] tracking-[0.3em] text-cyan-200/80">{MISSION_UI[mission].title}</div>
           <div className="flex items-center gap-2.5 font-mono text-xs text-white/70 sm:gap-3">
             <span className="tabular-nums" title="Mission time">T+{fmtTime(missionTime)}</span>
             <span className="text-cyan-300/60">|</span>
@@ -261,9 +253,9 @@ export function HUD({ onPause }: { onPause: () => void }) {
         style={{ transform: "translate(-50%, -6px)" }}
       >
         <div className="rounded-sm border border-rose-300/50 bg-[#1a040a]/85 px-4 py-2 text-center backdrop-blur-sm">
-          <div className="font-mono text-[10px] tracking-[0.3em] text-rose-300">LCX — LEFT CIRCUMFLEX</div>
+          <div className="font-mono text-[10px] tracking-[0.3em] text-rose-300">{MISSION_UI[mission].branchWarn.title}</div>
           <div className="mt-0.5 font-mono text-[11px] tracking-widest text-white/85">
-            THIS VESSEL IS CLEAR. THE BLOCKAGE IS IN THE LAD — TURN BACK.
+            {MISSION_UI[mission].branchWarn.body}
           </div>
         </div>
       </div>
@@ -288,51 +280,47 @@ export function HUD({ onPause }: { onPause: () => void }) {
         </div>
       )}
 
-      {/* objective panel — right side (desktop) */}
-      <div className="absolute right-5 top-1/2 hidden w-60 -translate-y-1/2 sm:right-8 md:block">
+      {/* objective panel — right side (desktop): current stage is the hero,
+          completed stages collapse to one line — focus, not a to-do wall */}
+      <div className="absolute right-5 top-1/2 hidden w-64 -translate-y-1/2 sm:right-8 md:block">
         <div className="mb-2 font-mono text-[9px] tracking-[0.35em] text-cyan-200/70">
           OBJECTIVE {currentObjective + 1}/{objectives.length}
         </div>
-        <div className="font-mono text-[13px] leading-snug tracking-wide text-white/90">
-          {cur ? cur.label : "MISSION COMPLETE"}
-        </div>
-        {distLabel && (
-          <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] tabular-nums tracking-[0.2em] text-amber-200/90">
-            <span className="inline-block h-1.5 w-1.5 rotate-45 bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.9)]" />
-            BEACON {distLabel}
+        <div className="rounded-sm border border-white/10 bg-black/45 px-3.5 py-3 backdrop-blur-sm">
+          <div className="font-mono text-[15px] font-bold leading-snug tracking-wide text-white drop-shadow-[0_0_14px_rgba(45,217,232,0.25)]">
+            {cur ? cur.label : "MISSION COMPLETE"}
           </div>
-        )}
-        {cur && cur.progress > 0 && cur.progress < 1 && (
-          <div className="mt-2 text-[11px]">
-            <BlockBar p={cur.progress} />
-          </div>
-        )}
-        <div className="mt-4 space-y-1.5">
-          {objectives.map((o, i) => (
-            <div key={o.id} className="flex items-center gap-2 font-mono text-[9px] tracking-widest">
-              <span
-                className={`inline-block ${
-                  o.done
-                    ? "text-[9px] leading-none text-cyan-300"
-                    : i === currentObjective
-                      ? "h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.9)]"
-                      : "h-1 w-1 rounded-full bg-white/20"
-                }`}
-              >
-                {o.done ? "\u2713" : ""}
-              </span>
-              <span className={o.done ? "text-white/35 line-through" : i === currentObjective ? "text-white/95" : "text-white/40"}>
-                {String(i + 1).padStart(2, "0")} {o.label}
-              </span>
+          {distLabel && (
+            <div className="mt-2 flex items-center gap-1.5 font-mono text-[10px] tabular-nums tracking-[0.2em] text-amber-200/90">
+              <span className="inline-block h-1.5 w-1.5 rotate-45 bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.9)]" />
+              BEACON {distLabel}
             </div>
-          ))}
+          )}
+          {cur && cur.progress > 0 && cur.progress < 1 && (
+            <div className="mt-2 text-[11px]">
+              <BlockBar p={cur.progress} />
+            </div>
+          )}
+          {currentObjective > 0 && (
+            <div className="mt-3 flex items-center gap-2 border-t border-white/8 pt-2 font-mono text-[9px] tracking-widest text-white/35">
+              <span className="text-cyan-300/60">{"\u2713"}</span>
+              {currentObjective} COMPLETE
+            </div>
+          )}
+          {objectives[currentObjective + 1] && (
+            <div className="mt-1.5 flex items-center gap-2 font-mono text-[9px] tracking-widest text-white/45">
+              <span className="inline-block h-1 w-1 rounded-full bg-white/25" />
+              NEXT {String(currentObjective + 2).padStart(2, "0")} {objectives[currentObjective + 1].label}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* contextual action hint — teaches the input at the exact moment of need */}
+      {/* contextual action hint — anchored just below the reticle so the eye
+          never leaves the aim line (VLM round 1) */}
       {actionHint && phase === "PLAYING" && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 sm:bottom-24">
-          <div className="animate-pulse rounded-sm border border-cyan-300/40 bg-black/65 px-4 py-2 font-mono text-[10px] tracking-[0.25em] text-cyan-100 backdrop-blur-sm sm:text-[11px]">
+        <div className="absolute left-1/2 top-[calc(50%+46px)] -translate-x-1/2">
+          <div className="animate-pulse rounded-full border border-cyan-300/40 bg-black/70 px-4 py-1.5 font-mono text-[10px] tracking-[0.22em] text-cyan-100 backdrop-blur-sm">
             {actionHint}
           </div>
         </div>

@@ -80,17 +80,20 @@ export function EducationPanel() {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 pb-[max(env(safe-area-inset-bottom),20px)] sm:items-center">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40" />
-      <div className="pointer-events-auto relative w-full max-w-lg overflow-hidden rounded-md border border-cyan-300/30 bg-[#040a10]/92 shadow-[0_0_60px_rgba(45,217,232,0.12)] backdrop-blur-md">
+      <div className="pointer-events-auto relative w-full max-w-xl overflow-hidden rounded-md border border-cyan-300/30 bg-[#040a10]/95 shadow-[0_0_60px_rgba(45,217,232,0.12)] backdrop-blur-md">
         {/* scan sweep line */}
         <div className="absolute left-0 right-0 top-0 h-px animate-[scanline_2.4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-cyan-300/80 to-transparent" />
-        <div className="px-5 pb-5 pt-6 sm:px-7">
+        <div className="px-5 pb-4 pt-5 sm:px-7">
           <div className="mb-1 flex items-center justify-between">
             <span className="font-mono text-[9px] tracking-[0.4em] text-cyan-200/80">ANATOMICAL SCAN</span>
-            {data.viaAI && (
-              <span className="rounded-sm border border-cyan-300/30 px-1.5 py-0.5 font-mono text-[8px] tracking-[0.2em] text-cyan-200/70">
-                AI ENHANCED
-              </span>
-            )}
+            <span className="flex items-center gap-2">
+              <span className="font-mono text-[8px] tracking-[0.25em] text-cyan-300">+ DISCOVERED</span>
+              {data.viaAI && (
+                <span className="rounded-sm border border-cyan-300/30 px-1.5 py-0.5 font-mono text-[8px] tracking-[0.2em] text-cyan-200/70">
+                  AI ENHANCED
+                </span>
+              )}
+            </span>
           </div>
           <h2 className="font-mono text-xl font-semibold tracking-[0.14em] text-white">
             {activeScan.title || data.title}
@@ -101,28 +104,28 @@ export function EducationPanel() {
 
           {/* grid reserves the final text height so the typewriter never shifts layout */}
           <div className="grid min-h-16">
-            <p className="invisible col-start-1 row-start-1 text-[13.5px] leading-relaxed text-white/85" aria-hidden>
+            <p className="invisible col-start-1 row-start-1 text-[13.5px] leading-relaxed text-white/90" aria-hidden>
               {data.explanation}
             </p>
-            <p className="col-start-1 row-start-1 text-[13.5px] leading-relaxed text-white/85">
+            <p className="col-start-1 row-start-1 text-[13.5px] leading-relaxed text-white/90">
               {data.explanation.slice(0, lines)}
               {lines < data.explanation.length && <span className="animate-pulse text-cyan-300">▌</span>}
             </p>
           </div>
 
-          <div className="mt-4 space-y-2.5">
+          <div className="mt-3 space-y-2.5">
             <div className="border-l-2 border-cyan-300/60 pl-3">
               <div className="font-mono text-[8px] tracking-[0.35em] text-cyan-200/70">WHY IT MATTERS</div>
-              <div className="mt-0.5 text-xs leading-relaxed text-white/75">{data.missionTip}</div>
+              <div className="mt-0.5 text-xs leading-relaxed text-white/80">{data.missionTip}</div>
             </div>
             <div className="border-l-2 border-amber-300/50 pl-3">
               <div className="font-mono text-[8px] tracking-[0.35em] text-amber-200/70">DID YOU KNOW</div>
-              <div className="mt-0.5 text-xs leading-relaxed text-white/75">{data.funFact}</div>
+              <div className="mt-0.5 text-xs leading-relaxed text-white/65">{data.funFact}</div>
             </div>
           </div>
 
           {data.keywords?.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {data.keywords.map((k) => (
                 <span key={k} className="rounded-full border border-white/15 px-2 py-0.5 font-mono text-[9px] tracking-widest text-white/60">
                   {k.toUpperCase()}
@@ -131,8 +134,7 @@ export function EducationPanel() {
             </div>
           )}
 
-          <div className="mt-5 flex items-center justify-between">
-            <span className="font-mono text-[9px] tracking-[0.3em] text-cyan-300">+ DISCOVERED</span>
+          <div className="mt-3 flex items-center justify-end border-t border-white/8 pt-3">
             <button
               className="rounded-sm border border-cyan-300/50 bg-cyan-400/10 px-5 py-2 font-mono text-[11px] tracking-[0.25em] text-cyan-100 transition hover:bg-cyan-300/25"
               onClick={closeScan}

@@ -135,6 +135,94 @@ export const ANATOMY: Record<string, AnatomyInfo> = {
     funFact: "If you unfolded every alveolus in your lungs flat, they would cover about half a tennis court.",
     keywords: ["gas exchange", "oxygen", "lungs"],
   },
+  airwayWall: {
+    id: "airwayWall",
+    organ: "airway wall",
+    title: "BRONCHIAL WALL",
+    subtitle: "Smooth muscle, mucus and cilia in one tube.",
+    body:
+      "Airway walls are lined with cilia — tiny beating hairs that sweep mucus and trapped debris upward — wrapped in smooth muscle that can constrict the tube. During an infection the wall swells and mucus production surges, narrowing the channel the air (and you) travel through.",
+    missionTip: "Inflamed walls are swollen and raw. The infection is deeper along this branch.",
+    funFact: "The cilia in your airways beat about 10 times per second, moving mucus at roughly 1 cm per minute.",
+    keywords: ["cilia", "mucus", "airway"],
+  },
+  macrophage: {
+    id: "macrophage",
+    organ: "macrophage",
+    title: "MACROPHAGE",
+    subtitle: "The immune system's big eater.",
+    body:
+      "Macrophages are large white blood cells that engulf and digest cellular debris, dead cells and pathogens — their name literally means 'big eater'. At an infection site they coordinate the response, calling other immune cells in and cleaning up the battlefield afterward.",
+    missionTip: "Macrophages cluster where the threat is. They will finish what you neutralize.",
+    funFact: "One macrophage can engulf more than 100 bacteria before it needs to be replaced.",
+    keywords: ["immune", "phagocyte", "defense"],
+  },
+  infectedCell: {
+    id: "infectedCell",
+    organ: "infected cell",
+    title: "INFECTED EPITHELIAL CELL",
+    subtitle: "A hijacked cell displaying viral antigens.",
+    body:
+      "Once a virus takes over a cell, the cell is forced to build viral copies instead of doing its job. Fragments of viral protein appear on its surface — antigens — which flag the immune system to destroy it. Infected cells swell and lose their normal shape before bursting.",
+    missionTip: "Scan the glowing cluster to measure the viral load before treating.",
+    funFact: "A single infected cell can release thousands of new viral particles when it bursts.",
+    keywords: ["antigen", "infection", "immune response"],
+  },
+  alveolarSac: {
+    id: "alveolarSac",
+    organ: "alveolar sac",
+    title: "ALVEOLAR SAC",
+    subtitle: "The cluster where gas exchange happens.",
+    body:
+      "Each alveolar sac is a bundle of alveoli wrapped in capillaries, forming the last stop of the breathing tree. Oxygen crosses into the blood here and carbon dioxide crosses back. When infection coats the sacs with fluid, that exchange slows — oxygen saturation falls.",
+    missionTip: "Patient saturation is tied to these sacs. Clear the infection and watch them glow again.",
+    funFact: "Your lungs contain around 480 million alveoli in total.",
+    keywords: ["gas exchange", "capillary", "saturation"],
+  },
+  aneurysm: {
+    id: "aneurysm",
+    organ: "aneurysm",
+    title: "ANEURYSM",
+    subtitle: "A balloon forming in the vessel wall.",
+    body:
+      "An aneurysm is a weak spot in an artery wall that balloons outward under blood pressure. In the brain it often forms at branch points where flow stress is highest. If it grows and ruptures, the bleeding — a hemorrhagic stroke — can happen in seconds, which is why early detection matters.",
+    missionTip: "Reinforce the wall before the bulge grows. Do not bump the fragile tissue.",
+    funFact: "Brain aneurysms are often smaller than a pencil eraser — about 6 mm can already be high-risk.",
+    keywords: ["stroke", "artery", "rupture"],
+  },
+  weakWall: {
+    id: "weakWall",
+    organ: "weakened wall",
+    title: "DEGRADED WALL SEGMENT",
+    subtitle: "Thinned tissue under flow stress.",
+    body:
+      "Where the vessel wall loses elasticity — from age, pressure or lipid deposits — it thins and stretches. Segments like these are the raw material of aneurysms. Reinforcing them restores the wall's strength and stops the ballooning before it starts.",
+    missionTip: "Hold the treatment beam on each weak segment until the matrix locks in.",
+    funFact: "Arterial walls are under a pressure wave about 100,000 times a day — every heartbeat.",
+    keywords: ["vessel", "pressure", "reinforcement"],
+  },
+  axon: {
+    id: "axon",
+    organ: "axon fiber",
+    title: "AXON",
+    subtitle: "The neuron's transmission cable.",
+    body:
+      "An axon is the long fiber carrying electrical impulses away from a neuron's cell body. Many axons are wrapped in myelin, a fatty sheath that lets signals jump along at enormous speed. In this network, the bright strands around the vessel are axon bundles firing in sequence.",
+    missionTip: "When the signal returns, you will see the axons light up in sequence.",
+    funFact: "Some axons in your legs are over a meter long — a single cell, one meter end to end.",
+    keywords: ["myelin", "signal", "neuron"],
+  },
+  synapse: {
+    id: "synapse",
+    organ: "synaptic terminal",
+    title: "SYNAPSE",
+    subtitle: "The gap where neurons talk.",
+    body:
+      "A synapse is the microscopic junction between two neurons. When an action potential arrives, vesicles release neurotransmitters across the gap, exciting or calming the next cell. Every thought, memory and movement is built from these chemical handshakes.",
+    missionTip: "Perfusion restored means the terminals can fire again. Watch the signal ring.",
+    funFact: "Your brain has roughly 100 trillion synapses — more stars than the Milky Way has.",
+    keywords: ["neurotransmitter", "signal", "brain"],
+  },
 };
 
 /** Occasional mid-flight micro-facts (spec §46) — verified, non-spammy. */

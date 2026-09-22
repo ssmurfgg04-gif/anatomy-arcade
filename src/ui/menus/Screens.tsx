@@ -4,7 +4,7 @@
  * payoff, failure screens. Every screen answers WHO/WHAT/WHY/WHAT-NEXT.
  */
 import { useEffect, useState } from "react";
-import { useGame, OBJECTIVE_WHY } from "@/game/core/state";
+import { useGame, OBJECTIVE_WHY, MISSION_UI, objectiveWhy } from "@/game/core/state";
 import { playChime, playSuccess, playBlip } from "@/audio/sfx";
 import type { MissionId } from "@/game/core/state";
 
@@ -48,19 +48,21 @@ const BRIEFS: Record<
     num: "02",
     name: "VIRAL INVASION",
     system: "RESPIRATORY / IMMUNE",
-    threat: "VIRAL INFECTION IN THE ALVEOLI",
-    situation: "Infected cells detected in the lung's air sacs. The immune response needs support.",
-    objective: "Identify infected cells and assist the immune response.",
+    threat: "VIRAL INFECTION — RIGHT LOWER LOBE",
+    situation:
+      "A viral infection is spreading through the alveoli of the right lower lobe. Gas exchange is failing — the patient's oxygen saturation is falling every minute.",
+    objective: "Reach the acinus, neutralize the viral colonies and restore oxygen exchange.",
     difficulty: 3,
     accent: "#2DD9E8",
   },
   brain: {
     num: "03",
     name: "BRAIN MISSION",
-    system: "NEURAL NETWORK",
-    threat: "DISRUPTED NEURAL PATHWAY",
-    situation: "A simulated neural pathway has lost its signal. The network needs rewiring.",
-    objective: "Reconnect the pathway and restore the signal.",
+    system: "NEURAL / CEREBROVASCULAR",
+    threat: "ANEURYSM — MCA BIFURCATION",
+    situation:
+      "A 6.2 mm aneurysm is ballooning on the middle cerebral artery. If it ruptures, the bleeding causes a hemorrhagic stroke within seconds.",
+    objective: "Reinforce the vessel wall before it ruptures and restore neural signal flow.",
     difficulty: 3,
     accent: "#8f6fd8",
   },
@@ -83,8 +85,13 @@ export function MissionBriefing() {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#04070c]/72 px-5 backdrop-blur-[3px]">
       <div
-        className={`w-full max-w-xl transition-all duration-700 ${mounted ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"}`}
+        className={`relative w-full max-w-2xl transition-all duration-700 ${mounted ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"}`}
       >
+        {/* corner brackets — the nano-interface frame (VLM round 1) */}
+        <span aria-hidden className="absolute -left-2 -top-2 h-5 w-5 border-l-2 border-t-2 border-cyan-300/50" />
+        <span aria-hidden className="absolute -right-2 -top-2 h-5 w-5 border-r-2 border-t-2 border-cyan-300/50" />
+        <span aria-hidden className="absolute -bottom-2 -left-2 h-5 w-5 border-b-2 border-l-2 border-cyan-300/50" />
+        <span aria-hidden className="absolute -bottom-2 -right-2 h-5 w-5 border-b-2 border-r-2 border-cyan-300/50" />
         <div className="flex items-baseline gap-3">
           <span className="font-mono text-4xl font-bold text-white/12">{b.num}</span>
           <div>
@@ -95,30 +102,30 @@ export function MissionBriefing() {
 
         <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-white/12 bg-white/10">
           {[
-            ["SYSTEM", b.system],
-            ["THREAT", b.threat],
-          ].map(([k, v]) => (
+            ["SYSTEM", b.system, "text-white/90"],
+            ["THREAT", b.threat, "text-rose-300"],
+          ].map(([k, v, vc]) => (
             <div key={k} className="bg-[#060a12]/90 px-4 py-3">
               <div className="font-mono text-[8px] tracking-[0.35em] text-cyan-200/60">{k}</div>
-              <div className="mt-1 font-mono text-[11px] tracking-widest text-white/90">{v}</div>
+              <div className={`mt-1 font-mono text-[11px] font-semibold tracking-widest ${vc}`}>{v}</div>
             </div>
           ))}
         </div>
 
-        <div className="mt-4 space-y-3 rounded-sm border border-white/12 bg-black/55 px-4 py-4">
+        <div className="mt-4 space-y-3 rounded-sm border border-white/12 bg-black/60 px-4 py-4">
           <div>
             <div className="font-mono text-[8px] tracking-[0.35em] text-cyan-200/60">YOUR ROLE</div>
-            <div className="mt-1 text-[13px] leading-relaxed text-white/85">
-              You are a medical nano-robot — a machine smaller than a grain of sand, piloted inside the human bloodstream.
+            <div className="mt-1 text-[13px] leading-relaxed text-white/90">
+              You are a medical nano-robot — a machine smaller than a grain of sand, piloted inside the human body.
             </div>
           </div>
           <div>
             <div className="font-mono text-[8px] tracking-[0.35em] text-rose-300/70">SITUATION</div>
-            <div className="mt-1 text-[13px] leading-relaxed text-white/85">{b.situation}</div>
+            <div className="mt-1 text-[13px] leading-relaxed text-white/90">{b.situation}</div>
           </div>
           <div>
-            <div className="font-mono text-[8px] tracking-[0.35em] text-cyan-200/60">OBJECTIVE</div>
-            <div className="mt-1 text-[13px] font-semibold leading-relaxed text-cyan-100">{b.objective}</div>
+            <div className="font-mono text-[8px] tracking-[0.35em] text-amber-300/70">OBJECTIVE</div>
+            <div className="mt-1 text-[13px] font-semibold leading-relaxed text-amber-100">{b.objective}</div>
           </div>
         </div>
 
@@ -156,6 +163,7 @@ export function MissionBriefing() {
 
 export function ObjectiveBanner() {
   const phase = useGame((s) => s.phase);
+  const mission = useGame((s) => s.mission);
   const setPhase = useGame((s) => s.setPhase);
   const objectives = useGame((s) => s.objectives);
   const currentObjective = useGame((s) => s.currentObjective);
@@ -192,8 +200,10 @@ export function ObjectiveBanner() {
           <div className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
             <div className="font-mono text-[9px] tracking-[0.4em] text-amber-200/80">NEXT</div>
             <div className="mt-1 font-mono text-sm tracking-[0.25em] text-white/85">{next.label}</div>
-            {OBJECTIVE_WHY[next.id] && (
-              <div className="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-white/50">{OBJECTIVE_WHY[next.id]}</div>
+            {(objectiveWhy(mission, next.id) || OBJECTIVE_WHY[next.id]) && (
+              <div className="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-white/50">
+                {objectiveWhy(mission, next.id) ?? OBJECTIVE_WHY[next.id]}
+              </div>
             )}
           </div>
         )}
@@ -205,6 +215,7 @@ export function ObjectiveBanner() {
 
 export function MissionComplete() {
   const phase = useGame((s) => s.phase);
+  const mission = useGame((s) => s.mission);
   const [showPayoff, setShowPayoff] = useState(false);
   useEffect(() => {
     if (phase !== "MISSION_COMPLETE") return;
@@ -219,7 +230,7 @@ export function MissionComplete() {
       {!showPayoff ? (
         <div className="text-center">
           <div className="animate-pulse font-mono text-3xl font-bold tracking-[0.35em] text-white drop-shadow-[0_0_30px_rgba(45,217,232,0.6)]">
-            FLOW RESTORED
+            {MISSION_UI[mission].payoff}
           </div>
           <div className="mx-auto mt-6 h-px w-64 bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
         </div>
@@ -313,13 +324,13 @@ const MISSION_LESSONS: Record<MissionId, { term: string; body: string; chips: st
   },
   viral: {
     term: "ANTIGEN → ANTIBODY",
-    body: "Viruses hijack cell machinery to copy themselves. Infected cells display viral antigens on their surface — the flag the immune system uses to find them. Antibodies mark infected cells so white blood cells can destroy them.",
-    chips: ["Antigen", "Antibody", "White blood cell"],
+    body: "Viruses hijack cell machinery to copy themselves. Infected cells display viral antigens on their surface — the flag the immune system uses to find them. Neutralizing the colonies buys time for macrophages to clear debris and for antibodies to mark every remaining infected cell. The fever breaks when the immune system wins the numbers game.",
+    chips: ["Antigen", "Antibody", "Macrophage", "Alveoli", "Gas exchange"],
   },
   brain: {
     term: "ACTION POTENTIAL",
-    body: "Neurons talk in electrical spikes. A neuron fires when charge difference across its membrane flips — an action potential — jumping the synapse with neurotransmitters to reach the next cell.",
-    chips: ["Neuron", "Synapse", "Neurotransmitter"],
+    body: "Neurons talk in electrical spikes: an action potential races down the axon and jumps the synapse with neurotransmitters. But neurons only fire if they are perfused — the artery feeding them must stay open. An aneurysm is a wall failure, not a blockage: reinforce the wall before it bursts, because a hemorrhagic stroke gives you minutes, not hours.",
+    chips: ["Aneurysm", "Action potential", "Perfusion", "MCA", "Stroke"],
   },
 };
 
@@ -338,13 +349,18 @@ export function Results() {
   const rank = score > 4200 ? "S" : score > 3400 ? "A" : score > 2600 ? "B" : "C";
   const lessons = discoveries.slice(0, 3);
   const lesson = MISSION_LESSONS[mission];
+  const titles: Record<MissionId, string> = {
+    heart: "HEART RESPONSE",
+    viral: "VIRAL RESPONSE",
+    brain: "STROKE RESPONSE",
+  };
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-[#04070c]/88 px-6 py-8 backdrop-blur-sm">
       <div className="w-full max-w-md">
         <div className="font-mono text-[10px] tracking-[0.45em] text-cyan-200/80">MISSION COMPLETE</div>
         <div className="mt-1 flex items-baseline gap-4">
-          <h2 className="font-mono text-2xl font-bold tracking-[0.15em] text-white">HEART RESPONSE</h2>
+          <h2 className="font-mono text-2xl font-bold tracking-[0.15em] text-white">{titles[mission]}</h2>
           <span
             className="inline-block animate-in zoom-in duration-700 font-mono text-4xl font-bold text-cyan-300 drop-shadow-[0_0_18px_rgba(45,217,232,0.6)]"
             style={{ animationDelay: "400ms", animationFillMode: "backwards" }}

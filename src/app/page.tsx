@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useGame, type Discovery } from "@/game/core/state";
+import { ANALYSIS_TITLES, MISSION_ANALYSIS_IDS } from "@/game/core/state";
 import { ANATOMY } from "@/game/data/anatomy";
 import { MenuScene } from "@/scenes/MenuScene";
 import { GameCanvas } from "@/scenes/GameCanvas";
@@ -92,15 +93,12 @@ export default function Home() {
       const info = ANATOMY[detail.id];
       if (!info) return;
       const g = useGame.getState();
-      // the blockage scan is a clinical READOUT, not just a discovery card
-      const analyzing = detail.id === "thrombus" || detail.id === "plaque";
+      // the threat scan is a clinical READOUT, not just a discovery card
+      const analysisIds = MISSION_ANALYSIS_IDS[g.mission];
+      const analyzing = analysisIds.includes(detail.id);
       const d: Discovery = {
         id: info.id,
-        title: analyzing
-          ? detail.id === "thrombus"
-            ? "ANALYSIS — 92% OCCLUSION (LAD)"
-            : "ANALYSIS — PLAQUE RUPTURE SITE (LAD)"
-          : info.title,
+        title: analyzing ? (ANALYSIS_TITLES[detail.id] ?? info.title) : info.title,
         subtitle: info.subtitle,
         body: info.body,
         missionTip: info.missionTip,
@@ -111,8 +109,8 @@ export default function Home() {
       g.openScan(d);
       // stage 05 CALIBRATE THE SCANNER — any successful scan teaches the tool
       if (!g.objectives[4].done) g.completeObjective(4);
-      // stage 07 ANALYZE THE BLOCKAGE — scanning the obstruction returns the readout
-      if (detail.id === "thrombus" || detail.id === "plaque") {
+      // stage 07 ANALYZE THE THREAT — scanning the obstruction returns the readout
+      if (analyzing) {
         if (!g.objectives[5].done) g.completeObjective(5);
         if (!g.objectives[6].done) g.completeObjective(6);
       }

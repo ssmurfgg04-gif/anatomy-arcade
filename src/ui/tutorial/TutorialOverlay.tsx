@@ -8,7 +8,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "@/game/core/state";
 import type { InputState } from "@/game/controls/input";
-import type { HeartRefs } from "@/game/levels/heart/HeartMission";
+
+/** Structural shape of the live refs the tutorial reads (mission-agnostic). */
+interface TutorialRefs {
+  player: { yaw: number; pitch: number };
+}
 
 interface Step {
   key: "MOVE" | "LOOK" | "SCAN";
@@ -43,6 +47,7 @@ export function TutorialOverlay({ input }: { input: React.MutableRefObject<Input
   const mission = useGame((s) => s.mission);
   const tutorialDone = useGame((s) => s.tutorialDone);
   const setTutorialDone = useGame((s) => s.setTutorialDone);
+  const currentObjective = useGame((s) => s.currentObjective);
   const [isTouch, setIsTouch] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
   const [finishing, setFinishing] = useState(false);
@@ -77,8 +82,15 @@ export function TutorialOverlay({ input }: { input: React.MutableRefObject<Input
     const onScan = () => complete();
     window.addEventListener("aa-scan", onScan);
     return () => window.removeEventListener("aa-scan", onScan);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx, finishing]);
+
+  // late-mission escape hatch: if the player is already deep into the arc
+  // (stage 6+), the controls are clearly known — end training automatically
+  // so the card never fights the treatment UI (VLM round 1)
+  useEffect(() => {
+    if (finishing || tutorialDone) return;
+    if (currentObjective >= 5) complete();
+  }, [currentObjective, finishing, tutorialDone]);
 
   // progress polling (movement + look deltas from the live rig)
   useEffect(() => {
@@ -91,7 +103,7 @@ export function TutorialOverlay({ input }: { input: React.MutableRefObject<Input
       last = now;
       const inp = input.current;
       const w = window as unknown as {
-        __aaRefs?: HeartRefs;
+        __aaRefs?: TutorialRefs;
         __aaInput?: { current: InputState };
       };
       const refs = w.__aaRefs;

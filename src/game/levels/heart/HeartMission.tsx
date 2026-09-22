@@ -29,6 +29,42 @@ const _center = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const RAY = new THREE.Raycaster();
 RAY.far = 12;
+// aim-assist scratch vectors (scan forgiveness cone)
+const _vFwd = new THREE.Vector3();
+const _vTo = new THREE.Vector3();
+
+/**
+ * Scan resolution: exact ray first, then a 20-degree aim-assist cone (nearest
+ * angle wins). The drift of flight means a perfectly-aimed reticle still
+ * wobbles — the assist keeps scanning fair without ever grabbing a target
+ * behind the player or outside the cone.
+ */
+function resolveScanTarget(
+  targets: THREE.Object3D[],
+  camera: THREE.Camera
+): { organ: string; id: string } | null {
+  RAY.setFromCamera(new THREE.Vector2(0, 0), camera);
+  for (const target of targets) {
+    if (RAY.intersectObject(target, true).length > 0) {
+      return { organ: target.userData.organ as string, id: target.userData.anatomyId as string };
+    }
+  }
+  camera.getWorldDirection(_vFwd);
+  let bestAng = 0.35;
+  let best: THREE.Object3D | null = null;
+  for (const target of targets) {
+    _vTo.setFromMatrixPosition(target.matrixWorld).sub(camera.position);
+    const dist = _vTo.length();
+    if (dist < 0.2 || dist > 11) continue;
+    _vTo.divideScalar(dist);
+    const ang = Math.acos(THREE.MathUtils.clamp(_vTo.dot(_vFwd), -1, 1));
+    if (ang < bestAng) {
+      bestAng = ang;
+      best = target;
+    }
+  }
+  return best ? { organ: best.userData.organ as string, id: best.userData.anatomyId as string } : null;
+}
 
 export interface HeartRefs {
   player: ReturnType<typeof createPlayerRefs>;
@@ -352,16 +388,9 @@ export function HeartMission({ refs, input, quality }: Props) {
       scanTap.current = false; // consumed
       scanLatch.current = true;
       scanCooldown.current = 0.6;
-      RAY.setFromCamera(new THREE.Vector2(0, 0), camera);
-      const targets = refs.scanTargets.current;
-      for (const target of targets) {
-        const hits = RAY.intersectObject(target, true);
-        if (hits.length > 0) {
-          const organ = target.userData.organ as string;
-          const id = target.userData.anatomyId as string;
-          window.dispatchEvent(new CustomEvent("aa-scan", { detail: { organ, id } }));
-          break;
-        }
+      const hit = resolveScanTarget(refs.scanTargets.current, camera);
+      if (hit) {
+        window.dispatchEvent(new CustomEvent("aa-scan", { detail: { organ: hit.organ, id: hit.id } }));
       }
     }
     if (!scanPressed) {
@@ -502,7 +531,7 @@ export function HeartMission({ refs, input, quality }: Props) {
               if (mesh) refs.scanTargets.current[i] = mesh;
             }}
           >
-            <octahedronGeometry args={[0.13, 0]} />
+            <octahedronGeometry args={[0.18, 0]} />
             <meshStandardMaterial
               color={m.id === "thrombus" || m.id === "plaque" ? "#C21E3A" : "#2DD9E8"}
               emissive={m.id === "thrombus" || m.id === "plaque" ? "#C21E3A" : "#2DD9E8"}
@@ -660,6 +689,8 @@ function HeroHeart({
     <group ref={group} position={layout.pos} quaternion={layout.quat}>
       <primitive object={scene} />
       <pointLight intensity={quality === "LOW" ? 1.0 : 1.5} distance={30} color="#c21e3a" position={[0, 0, 6]} />
+      {/* rim separation: cool light from behind so the organ reads against the void (VLM round 1) */}
+      <pointLight intensity={quality === "LOW" ? 1.4 : 2.2} distance={44} color="#7fd8e8" position={[0, 3, -10]} />
     </group>
   );
 }
